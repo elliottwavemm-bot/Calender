@@ -1,0 +1,357 @@
+/* Inkling — calendar + sketchbook layout.
+   The screen is a fixed 1194 × 834 canvas (the design's device frame). On
+   smaller viewports `--app-scale` shrinks the whole shell uniformly so the
+   proportions never drift. */
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  background: var(--color-neutral-800);
+  padding: 28px;
+  /* The shell is scaled, not reflowed, so its layout box can exceed the
+     viewport. `margin: auto` keeps the overflow even on both sides; this
+     clips what falls outside instead of raising scrollbars. */
+  overflow: hidden;
+}
+
+.device {
+  margin: auto;
+  background: var(--color-text);
+  border-radius: 42px;
+  padding: 16px;
+  box-shadow: var(--shadow-lg);
+  transform: scale(var(--app-scale, 1));
+  transform-origin: center center;
+}
+
+.screen {
+  width: 1194px;
+  height: 834px;
+  background: var(--color-bg);
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top bar ────────────────────────────────────────────────────────── */
+
+.topbar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 200px;
+  flex: none;
+}
+.brand-mark { display: flex; }
+.brand-mark i {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  display: block;
+}
+.brand-mark i + i {
+  background: var(--color-accent-2);
+  margin-left: -7px;
+  mix-blend-mode: multiply;
+}
+.brand-name { font-family: var(--font-heading); font-size: 21px; }
+
+.navcluster {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.nav-title {
+  font-family: var(--font-heading);
+  font-size: 23px;
+  min-width: 280px;
+  text-align: center;
+}
+.btn-today { margin-left: 4px; }
+
+/* ── View host ──────────────────────────────────────────────────────── */
+
+.viewport { flex: 1; position: relative; min-height: 0; }
+
+.view { height: 100%; box-sizing: border-box; }
+.view[hidden] { display: none; }
+
+/* ── Month ──────────────────────────────────────────────────────────── */
+
+.month {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 20px 18px;
+}
+.month-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  padding: 0 0 6px;
+}
+.month-head span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  padding-left: 10px;
+}
+.month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+.cell {
+  border-radius: var(--radius-lg);
+  padding: 8px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.daynum {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-more {
+  font-size: 10px;
+  color: var(--color-neutral-600);
+  padding-left: 8px;
+}
+
+/* ── Time grid (week + day) ─────────────────────────────────────────── */
+
+.gutter { width: 52px; flex: none; position: relative; }
+.gutter span {
+  position: absolute;
+  right: 12px;
+  font-size: 11px;
+  color: var(--color-neutral-500);
+  transform: translateY(-6px);
+}
+
+.col-head {
+  height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding-left: 3px;
+}
+.col-head-label,
+.day-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.col-daynum {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.track {
+  flex: 1;
+  position: relative;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-100);
+  overflow: hidden;
+}
+.track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 55px,
+    var(--color-neutral-200) 55px 56px
+  );
+}
+
+.week { display: flex; padding: 6px 20px 16px; }
+.week-cols {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+.week-col { display: flex; flex-direction: column; min-width: 0; }
+
+.allday {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 10px;
+  padding: 5px 9px;
+  overflow: hidden;
+}
+.event-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-time { font-size: 10.5px; opacity: 0.75; }
+
+/* ── Day ────────────────────────────────────────────────────────────── */
+
+.day { display: flex; gap: 18px; padding: 6px 20px 16px; }
+.day-main { flex: 11; display: flex; min-width: 0; }
+.day-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.day-head { height: 50px; display: flex; align-items: center; gap: 8px; padding-left: 3px; }
+.day-side { flex: 9; display: flex; flex-direction: column; min-width: 0; }
+.day-side-head { height: 50px; display: flex; align-items: center; }
+.day-side-head span {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.day .allday { left: 6px; right: auto; padding: 3px 10px; }
+.day .event {
+  left: 6px;
+  right: 6px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.day .event-name { font-size: 13px; }
+.day .event-time { font-size: 11px; }
+
+/* ── Paper (sketch surfaces) ────────────────────────────────────────── */
+
+.paper {
+  flex: 1;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-neutral-100);
+  background-image: var(--paper-bg, none);
+  background-size: var(--paper-size, auto);
+}
+
+.notes { padding: 6px 20px 16px; }
+.notes .paper { height: 100%; position: relative; }
+.notes-label {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+/* ── Ink layer ──────────────────────────────────────────────────────── */
+
+#ink {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  touch-action: none;
+  cursor: crosshair;
+  width: 100%;
+  height: 100%;
+}
+#ink[data-tool="cursor"] { pointer-events: none; cursor: default; }
+
+/* ── Toolbar ────────────────────────────────────────────────────────── */
+
+.toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--color-neutral-100);
+  border-radius: 999px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-md);
+}
+.toolbar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--color-neutral-300);
+  margin: 0 4px;
+}
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.nib {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.nib span { display: block; border-radius: 999px; background: var(--color-neutral-700); }
+.is-selected { box-shadow: 0 0 0 2px var(--color-neutral-100), 0 0 0 4px var(--color-accent-600); }
