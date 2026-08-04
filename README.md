@@ -14,6 +14,23 @@ Open `index.html` in a browser, or serve the folder:
 python3 -m http.server 8000
 ```
 
+Everything sits at the repository root, so GitHub Pages serves it as-is —
+point Pages at the branch and the site is live, no build step in between.
+
+## Building a single file
+
+`build.py` folds the stylesheets, scripts and woff2 faces (as data URIs) into
+one file that opens from disk and makes no network requests at all:
+
+```
+python3 build.py                  # -> dist/inkling.html   (~117 KB)
+python3 build.py --fragment out.html   # body content only, for hosts that
+                                       # supply their own <html> skeleton
+```
+
+`dist/inkling.html` is committed, so it can be shared or dropped onto any
+static host on its own.
+
 ## What's here
 
 ```
@@ -23,6 +40,8 @@ assets/css/app.css    calendar and sketchbook layout
 assets/js/events.js   calendar contents
 assets/js/app.js      views, navigation and the ink layer
 assets/fonts/         Caprasimo (headings) + Figtree (body), woff2 subsets
+build.py              single-file bundler
+dist/inkling.html     the bundled result
 ```
 
 ## Views
@@ -89,6 +108,14 @@ placed and sized from `h` and `du`.
 
 ## Layout
 
-The screen is a fixed 1194 × 834 shell — the design's device frame. Rather
-than reflow at smaller sizes it scales uniformly through `--app-scale`, so the
-proportions hold on any viewport.
+The screen is a fixed 1194 × 834 shell — the design's device frame. Down to
+tablet widths it scales uniformly through `--app-scale` rather than reflowing,
+so the proportions hold exactly.
+
+Under 860px that stops being flattering and starts being unreadable, so the
+layout goes fluid: the frame comes off, the shell fills the viewport, the top
+bar splits into two rows, the hour grid tightens from 56px to 44px, and the
+sketch panel beside the day view — which needs width it hasn't got — gives
+way. Under 520px the toolbar drops its group separators to keep all twelve
+controls on one row. Row and header heights live in `--hour-h` and `--head-h`
+so the CSS grid lines and the JS event positions retune together.

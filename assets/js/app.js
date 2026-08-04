@@ -18,10 +18,20 @@
   };
 
   var STORAGE_KEY = 'inkling-ink';
-  var HOUR_H = 56;          // px per hour on the time grids
   var HOUR_ROWS = 12;       // hours shown before the grid runs out
-  var HEAD_H = 50;          // column header height, offsets the hour gutter
   var MAX_CHIPS = 2;        // event chips per month cell before "+N more"
+  var FLUID_MAX = 860;      // below this the device frame comes off — matches app.css
+
+  /* Row height and header height live in CSS so the fluid layout can shrink
+     them; the time grids read them back to place labels and events. */
+  function hourHeight() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hour-h'));
+    return v || 56;
+  }
+  function headHeight() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h'));
+    return v || 50;
+  }
 
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
     'August', 'September', 'October', 'November', 'December'];
@@ -178,9 +188,11 @@
   function renderGutter(target) {
     clear(target);
     var hs = hourStart();
+    var hh = hourHeight();
+    var top = headHeight();
     for (var i = 0; i < HOUR_ROWS; i++) {
       var s = node('span', null, formatTime(hs + i));
-      s.style.top = (HEAD_H + i * HOUR_H) + 'px';
+      s.style.top = (top + i * hh) + 'px';
       target.appendChild(s);
     }
   }
@@ -189,6 +201,7 @@
   function fillTrack(track, list, detailed) {
     clear(track);
     var hs = hourStart();
+    var hh = hourHeight();
 
     list.filter(function (e) { return e.h == null; }).forEach(function (e) {
       var c = eventColors(e.c);
@@ -203,8 +216,8 @@
       var box = node('div', 'event');
       box.style.background = c.bg;
       box.style.color = c.fg;
-      box.style.top = ((e.h - hs) * HOUR_H + 2) + 'px';
-      box.style.height = (e.du * HOUR_H - 5) + 'px';
+      box.style.top = ((e.h - hs) * hh + 2) + 'px';
+      box.style.height = (e.du * hh - 5) + 'px';
 
       var time = formatTime(e.h) + ' – ' + formatTime(e.h + e.du);
       if (detailed) {
@@ -518,6 +531,11 @@
   /* ── Fit the fixed 1194×834 shell into whatever viewport we get ──── */
 
   function fit() {
+    // Fluid layout sizes itself — scaling it too would just make it small.
+    if (window.innerWidth <= FLUID_MAX) {
+      document.documentElement.style.setProperty('--app-scale', '1');
+      return;
+    }
     var frame = el.device;
     var w = frame.offsetWidth, h = frame.offsetHeight;
     if (!w || !h) return;
@@ -526,7 +544,15 @@
     document.documentElement.style.setProperty('--app-scale', String(Math.max(s, 0.2)));
   }
 
-  window.addEventListener('resize', function () { fit(); redraw(); });
+  /* A resize can cross the fluid breakpoint, which changes the row height the
+     time grids are built from — so re-render, not just repaint. */
+  var resizeTimer = 0;
+  window.addEventListener('resize', function () {
+    fit();
+    redraw();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 120);
+  });
 
   /* ── Boot ───────────────────────────────────────────────────────── */
 

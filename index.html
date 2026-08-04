@@ -16,11 +16,21 @@
     <div class="screen" data-screen-label="Inkling calendar">
 
       <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
-          <span class="brand-name">Inkling</span>
+        <div class="topbar-row">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+            <span class="brand-name">Inkling</span>
+          </div>
+
+          <div class="seg" role="radiogroup" aria-label="View">
+            <label class="seg-opt"><input type="radio" name="view" value="month" checked>Month</label>
+            <label class="seg-opt"><input type="radio" name="view" value="week">Week</label>
+            <label class="seg-opt"><input type="radio" name="view" value="day">Day</label>
+            <label class="seg-opt"><input type="radio" name="view" value="notes">Notes</label>
+          </div>
         </div>
 
+        <div class="topbar-row">
         <div class="navcluster">
           <button class="btn btn-icon btn-ghost" data-nav="-1" aria-label="Previous">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
@@ -31,12 +41,6 @@
           </button>
           <button class="btn btn-ghost btn-today" id="btnToday">Today</button>
         </div>
-
-        <div class="seg" role="radiogroup" aria-label="View">
-          <label class="seg-opt"><input type="radio" name="view" value="month" checked>Month</label>
-          <label class="seg-opt"><input type="radio" name="view" value="week">Week</label>
-          <label class="seg-opt"><input type="radio" name="view" value="day">Day</label>
-          <label class="seg-opt"><input type="radio" name="view" value="notes">Notes</label>
         </div>
       </header>
 
