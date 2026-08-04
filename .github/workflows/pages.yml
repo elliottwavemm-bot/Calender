@@ -1,12 +1,12 @@
 name: Deploy to GitHub Pages
 
-# The default branch is currently the working branch; `main` is listed too so
-# deploys keep running once the work lands there.
+# Only `main` deploys. The github-pages environment carries a deployment
+# branch rule that rejects other branches, so pushing the working branch
+# would just produce failed runs.
 on:
   push:
     branches:
       - main
-      - claude/follow-instructions-dc0i5i
   workflow_dispatch:
 
 permissions:

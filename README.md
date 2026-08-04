@@ -16,20 +16,25 @@ python3 -m http.server 8000
 
 ## Publishing
 
-`.github/workflows/pages.yml` deploys to GitHub Pages on every push to the
-default branch. It rebuilds the single-file bundle, assembles `_site` from
-`index.html`, `assets/` and `dist/`, checks the bundle came out whole, and
-publishes.
+`.github/workflows/pages.yml` deploys to GitHub Pages on every push to
+`main`. It rebuilds the single-file bundle, assembles `_site` from
+`index.html`, `manifest.webmanifest`, `assets/` and `dist/`, checks the bundle
+came out whole, and publishes.
+
+Only `main` deploys: enabling Pages creates a `github-pages` environment whose
+deployment branch rule rejects everything else, so a push from another branch
+is refused before the job starts — *"Branch … is not allowed to deploy to
+github-pages due to environment protection rules"*.
 
 Pages has to be switched to the Actions source once, by hand:
 **Settings → Pages → Build and deployment → Source: GitHub Actions**. Until
 that is done the run stops at `configure-pages` with *"Get Pages site failed"*.
-Having the workflow create the site itself (`enablement: true`) does not work
-here — the workflow's `GITHUB_TOKEN` is refused with *"Resource not accessible
-by integration"*, since creating a Pages site needs repository-admin rights
-the token does not carry.
+Having the workflow create the site itself (`enablement: true`) does not work —
+the workflow's `GITHUB_TOKEN` is refused with *"Resource not accessible by
+integration"*, since creating a Pages site needs repository-admin rights the
+token does not carry.
 
-Once the setting is on, re-run the workflow (or push) and the site lands at
+The site is served under the repository name, not at the domain root:
 `https://<owner>.github.io/Calender/`.
 
 For a custom domain, add a `CNAME` file containing the hostname next to
