@@ -329,14 +329,21 @@
 
 /* ── Toolbar ────────────────────────────────────────────────────────── */
 
+/* Anchored to both edges rather than centred on one: a `left: 50%` box only
+   gets half the viewport to lay out in, which wraps the tools onto extra
+   rows long before they actually run out of room. */
 .toolbar {
   position: absolute;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   bottom: 16px;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin: 0 auto;
   z-index: 10;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 5px;
   background: var(--color-neutral-100);
   border-radius: 999px;
@@ -372,16 +379,24 @@
 .nib span { display: block; border-radius: 999px; background: var(--color-neutral-700); }
 .is-selected { box-shadow: 0 0 0 2px var(--color-neutral-100), 0 0 0 4px var(--color-accent-600); }
 
-/* ── Fluid layout ───────────────────────────────────────────────────────
-   Under 860px the device frame stops being a flattering way to show the
-   app and starts being a reason you can't read it. Below that the frame
-   comes off, the shell fills the viewport, and the pieces that assume a
-   1194px-wide desk — the second title row, the sketch panel beside the
-   day — give way. */
+/* ── Beyond the desk ────────────────────────────────────────────────────
+   The 1194x834 shell is a device frame: a flattering way to present the app
+   on a roomy desktop. Anywhere it does not fit at full size, drawing a
+   picture of a tablet inside a tablet just wastes the screen — so the frame
+   comes off and the app fills the viewport instead.
 
-@media (max-width: 860px) {
-  :root { --hour-h: 44px; --head-h: 42px; }
+   Three tiers, each answering a different question:
+     frameless  the frame no longer fits         -> fill the screen
+     stacked    the top bar's groups no longer fit on one line
+     compact    the grids themselves need smaller type and shorter rows
 
+   They are deliberately independent. A landscape tablet is frameless at
+   full size; a portrait one also stacks the bar but keeps the type; only a
+   phone needs all three.                                                  */
+
+/* The frame needs 1282 x 922 to show at 1:1 (shell + its padding + the
+   stage's). Short desktop windows qualify on height alone. */
+@media (max-width: 1280px), (max-height: 920px) {
   .stage { padding: 0; overflow: visible; background: var(--color-bg); }
   .device {
     margin: 0;
@@ -398,8 +413,10 @@
     height: 100dvh;
     border-radius: 0;
   }
+}
 
-  /* Two rows: identity + view switch, then the date and its controls. */
+/* Brand, dates and view switch stop fitting on one line. */
+@media (max-width: 1000px) {
   .topbar {
     height: auto;
     flex-direction: column;
@@ -419,6 +436,11 @@
   .navcluster { gap: 2px; }
   .nav-title { font-size: 17px; min-width: 0; flex: 1; }
   .btn-today { font-size: 13px; }
+}
+
+/* Below this the cells are too narrow to carry desktop type. */
+@media (max-width: 780px) {
+  :root { --hour-h: 44px; --head-h: 42px; }
 
   .month { padding: 2px 8px 12px; }
   .month-head { gap: 3px; }
@@ -446,21 +468,7 @@
 
   .notes { padding: 2px 8px 12px; }
 
-  /* Anchored to both edges rather than centred on one: a `left: 50%` box
-     only gets half the viewport to lay out in, which wraps the tools into
-     three rows long before they actually run out of room. */
-  .toolbar {
-    bottom: 10px;
-    left: 10px;
-    right: 10px;
-    transform: none;
-    width: fit-content;
-    margin: 0 auto;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 3px;
-    padding: 6px 10px;
-  }
+  .toolbar { bottom: 10px; gap: 3px; padding: 6px 10px; }
   .toolbar .btn-icon { width: 30px; height: 30px; }
   .toolbar-sep { margin: 0 2px; height: 18px; }
   .swatch { width: 19px; height: 19px; }

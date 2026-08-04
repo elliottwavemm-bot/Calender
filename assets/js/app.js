@@ -20,7 +20,10 @@
   var STORAGE_KEY = 'inkling-ink';
   var HOUR_ROWS = 12;       // hours shown before the grid runs out
   var MAX_CHIPS = 2;        // event chips per month cell before "+N more"
-  var FLUID_MAX = 860;      // below this the device frame comes off — matches app.css
+  // The device frame needs this much room to show at 1:1 — matches the
+  // frameless media query in app.css.
+  var FRAME_MIN_W = 1280;
+  var FRAME_MIN_H = 920;
 
   /* Row height and header height live in CSS so the fluid layout can shrink
      them; the time grids read them back to place labels and events. */
@@ -531,8 +534,8 @@
   /* ── Fit the fixed 1194×834 shell into whatever viewport we get ──── */
 
   function fit() {
-    // Fluid layout sizes itself — scaling it too would just make it small.
-    if (window.innerWidth <= FLUID_MAX) {
+    // The frameless layout sizes itself — scaling it too would just shrink it.
+    if (window.innerWidth <= FRAME_MIN_W || window.innerHeight <= FRAME_MIN_H) {
       document.documentElement.style.setProperty('--app-scale', '1');
       return;
     }

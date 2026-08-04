@@ -16,29 +16,30 @@ python3 -m http.server 8000
 
 ## Publishing
 
-`.github/workflows/pages.yml` deploys to GitHub Pages on every push to
-`main`. It rebuilds the single-file bundle, assembles `_site` from
-`index.html`, `manifest.webmanifest`, `assets/` and `dist/`, checks the bundle
-came out whole, and publishes.
+The site is served by GitHub Pages straight from the `main` branch
+(**Settings → Pages → Source: Deploy from a branch**, branch `main`, folder
+`/ (root)`), so a push is the whole deploy. `.nojekyll` turns off Jekyll
+processing, which the site does not need.
 
-Only `main` deploys: enabling Pages creates a `github-pages` environment whose
-deployment branch rule rejects everything else, so a push from another branch
-is refused before the job starts — *"Branch … is not allowed to deploy to
-github-pages due to environment protection rules"*.
-
-Pages has to be switched to the Actions source once, by hand:
-**Settings → Pages → Build and deployment → Source: GitHub Actions**. Until
-that is done the run stops at `configure-pages` with *"Get Pages site failed"*.
-Having the workflow create the site itself (`enablement: true`) does not work —
-the workflow's `GITHUB_TOKEN` is refused with *"Resource not accessible by
-integration"*, since creating a Pages site needs repository-admin rights the
-token does not carry.
-
-The site is served under the repository name, not at the domain root:
+It lives under the repository name, not at the domain root:
 `https://<owner>.github.io/Calender/`.
 
-For a custom domain, add a `CNAME` file containing the hostname next to
-`index.html` — the workflow copies it along with everything else.
+`dist/inkling.html` is rebuilt with `build.py` and committed, so what is
+served always matches the source.
+
+<details>
+<summary>Why not GitHub Actions?</summary>
+
+An Actions workflow was tried first and could not deploy. Enabling Pages
+creates a `github-pages` environment whose deployment branch rule rejected
+every branch tried, failing the job before any step ran — *"Branch … is not
+allowed to deploy to github-pages due to environment protection rules"*.
+Having the workflow create the Pages site itself (`enablement: true`) was
+refused too: creating one needs repository-admin rights that the workflow's
+`GITHUB_TOKEN` does not carry. Branch-source deployment sidesteps the
+environment entirely, and this site has no build step worth automating.
+
+</details>
 
 ## Adding it to a home screen
 
@@ -82,6 +83,7 @@ assets/js/app.js      views, navigation and the ink layer
 assets/fonts/         Caprasimo (headings) + Figtree (body), woff2 subsets
 build.py              single-file bundler
 tools/make-icons.js   redraws the app icons from the brand mark
+.nojekyll             serve the files as-is, no Jekyll
 manifest.webmanifest  home-screen install metadata
 assets/icons/         app icons (PNG, for iOS and Android)
 dist/inkling.html     the bundled result
