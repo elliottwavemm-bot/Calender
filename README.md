@@ -21,9 +21,9 @@ default branch. It rebuilds the single-file bundle, assembles `_site` from
 `index.html`, `assets/` and `dist/`, checks the bundle came out whole, and
 publishes.
 
-The workflow needs Pages switched to the Actions source once, by hand:
-**Settings → Pages → Build and deployment → Source: GitHub Actions**. After
-that the site is at `https://<owner>.github.io/Calender/`.
+The first run turns Pages on itself (`enablement: true` on
+`actions/configure-pages`), so there is no repository setting to flip by hand.
+The site lands at `https://<owner>.github.io/Calender/`.
 
 For a custom domain, add a `CNAME` file containing the hostname next to
 `index.html` — the workflow copies it along with everything else.

@@ -43,7 +43,11 @@ jobs:
           grep -q 'data:font/woff2' _site/dist/inkling.html
           grep -q 'INKLING_EVENTS' _site/dist/inkling.html
 
+      # `enablement` turns Pages on via the API on the first run, so the site
+      # does not need the repository setting flipped by hand first.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
