@@ -33,7 +33,7 @@ jobs:
         run: |
           python3 build.py
           mkdir -p _site
-          cp -r index.html assets dist _site/
+          cp -r index.html manifest.webmanifest assets dist _site/
           # A custom domain, if one has been configured.
           [ -f CNAME ] && cp CNAME _site/ || true
 

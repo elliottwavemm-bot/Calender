@@ -35,6 +35,23 @@ Once the setting is on, re-run the workflow (or push) and the site lands at
 For a custom domain, add a `CNAME` file containing the hostname next to
 `index.html` — the workflow copies it along with everything else.
 
+## Adding it to a home screen
+
+`manifest.webmanifest` and an `apple-touch-icon` make the site installable: on
+iOS *Add to Home Screen*, on Android *Install app*. It launches in
+`standalone` display, so it opens without browser chrome.
+
+The icon is the brand mark — the two overlapping circles, drawn as PNG in
+`assets/icons/`. iOS ignores SVG favicons entirely and reads `apple-touch-icon`
+instead, which is why the mark ships as a bitmap as well as the inline SVG
+favicon. `icon-maskable-512.png` keeps the mark inside the safe zone for
+platforms that crop icons to a circle.
+
+Regenerate the PNGs from the mark with `tools/make-icons.js` (needs Playwright).
+
+Note that this only applies to the site served from this repository. A copy
+embedded in someone else's page takes that page's touch icon, not this one.
+
 ## Building a single file
 
 `build.py` folds the stylesheets, scripts and woff2 faces (as data URIs) into
@@ -59,6 +76,9 @@ assets/js/events.js   calendar contents
 assets/js/app.js      views, navigation and the ink layer
 assets/fonts/         Caprasimo (headings) + Figtree (body), woff2 subsets
 build.py              single-file bundler
+tools/make-icons.js   redraws the app icons from the brand mark
+manifest.webmanifest  home-screen install metadata
+assets/icons/         app icons (PNG, for iOS and Android)
 dist/inkling.html     the bundled result
 ```
 

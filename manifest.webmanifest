@@ -1,0 +1,16 @@
+{
+  "name": "Inkling — Calendar & Sketchbook",
+  "short_name": "Inkling",
+  "description": "A calendar you can draw on. Month, week and day views plus a sketchbook, with a pen, highlighter and eraser over every page.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5ead8",
+  "theme_color": "#f5ead8",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

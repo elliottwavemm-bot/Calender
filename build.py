@@ -44,8 +44,17 @@ def build():
         src = match.group(1)
         return '<script>\n%s\n</script>' % (ROOT / src).read_text(encoding='utf-8')
 
+    def inline_icon(match):
+        path = ROOT / match.group(1)
+        data = base64.b64encode(path.read_bytes()).decode()
+        return '<link rel="apple-touch-icon" href="data:image/png;base64,%s">' % data
+
     html = re.sub(r'<link rel="stylesheet" href="([^"]+)">', inline_css, html)
     html = re.sub(r'<script src="([^"]+)"></script>', inline_js, html)
+    html = re.sub(r'<link rel="apple-touch-icon" href="([^"]+)">', inline_icon, html)
+    # A lone file has nowhere to serve a manifest from, and the icons it names
+    # are separate requests — drop the link rather than ship a broken one.
+    html = re.sub(r'\s*<link rel="manifest" href="[^"]+">', '', html)
     return html
 
 
