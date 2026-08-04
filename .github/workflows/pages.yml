@@ -43,11 +43,12 @@ jobs:
           grep -q 'data:font/woff2' _site/dist/inkling.html
           grep -q 'INKLING_EVENTS' _site/dist/inkling.html
 
-      # `enablement` turns Pages on via the API on the first run, so the site
-      # does not need the repository setting flipped by hand first.
+      # Pages must already be switched to the Actions source in repository
+      # settings. `enablement: true` would create the site automatically, but
+      # the workflow's GITHUB_TOKEN is not allowed to ("Resource not
+      # accessible by integration"), so this reads the existing config only
+      # and fails with a clear message until the setting is turned on.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

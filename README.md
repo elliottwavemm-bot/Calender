@@ -21,9 +21,16 @@ default branch. It rebuilds the single-file bundle, assembles `_site` from
 `index.html`, `assets/` and `dist/`, checks the bundle came out whole, and
 publishes.
 
-The first run turns Pages on itself (`enablement: true` on
-`actions/configure-pages`), so there is no repository setting to flip by hand.
-The site lands at `https://<owner>.github.io/Calender/`.
+Pages has to be switched to the Actions source once, by hand:
+**Settings → Pages → Build and deployment → Source: GitHub Actions**. Until
+that is done the run stops at `configure-pages` with *"Get Pages site failed"*.
+Having the workflow create the site itself (`enablement: true`) does not work
+here — the workflow's `GITHUB_TOKEN` is refused with *"Resource not accessible
+by integration"*, since creating a Pages site needs repository-admin rights
+the token does not carry.
+
+Once the setting is on, re-run the workflow (or push) and the site lands at
+`https://<owner>.github.io/Calender/`.
 
 For a custom domain, add a `CNAME` file containing the hostname next to
 `index.html` — the workflow copies it along with everything else.
