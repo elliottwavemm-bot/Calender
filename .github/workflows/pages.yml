@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+# The default branch is currently the working branch; `main` is listed too so
+# deploys keep running once the work lands there.
+on:
+  push:
+    branches:
+      - main
+      - claude/follow-instructions-dc0i5i
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it — a half-published
+# site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          python3 build.py
+          mkdir -p _site
+          cp -r index.html assets dist _site/
+          # A custom domain, if one has been configured.
+          [ -f CNAME ] && cp CNAME _site/ || true
+
+      - name: Check the bundle came out whole
+        run: |
+          test -s _site/dist/inkling.html
+          grep -q 'data:font/woff2' _site/dist/inkling.html
+          grep -q 'INKLING_EVENTS' _site/dist/inkling.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

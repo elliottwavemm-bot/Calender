@@ -14,8 +14,19 @@ Open `index.html` in a browser, or serve the folder:
 python3 -m http.server 8000
 ```
 
-Everything sits at the repository root, so GitHub Pages serves it as-is —
-point Pages at the branch and the site is live, no build step in between.
+## Publishing
+
+`.github/workflows/pages.yml` deploys to GitHub Pages on every push to the
+default branch. It rebuilds the single-file bundle, assembles `_site` from
+`index.html`, `assets/` and `dist/`, checks the bundle came out whole, and
+publishes.
+
+The workflow needs Pages switched to the Actions source once, by hand:
+**Settings → Pages → Build and deployment → Source: GitHub Actions**. After
+that the site is at `https://<owner>.github.io/Calender/`.
+
+For a custom domain, add a `CNAME` file containing the hostname next to
+`index.html` — the workflow copies it along with everything else.
 
 ## Building a single file
 
