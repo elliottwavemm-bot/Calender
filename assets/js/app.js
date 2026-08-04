@@ -68,10 +68,13 @@
     'palette', 'nibs', 'btnUndo', 'btnClear', 'device'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
-  var ctx = el.ink.getContext('2d');
+  // `desynchronized` lets the browser skip a compositing step and put ink on
+  // the glass sooner. It is the single cheapest latency win available here.
+  var ctx = el.ink.getContext('2d', { desynchronized: true });
   var live = null;          // stroke in progress, not yet committed
   var rafPending = 0;
   var dpr = 1;
+  var TAU = Math.PI * 2;
 
   /* ── Dates ──────────────────────────────────────────────────────── */
 
@@ -386,14 +389,93 @@
     return el.viewport.offsetWidth ? r.width / el.viewport.offsetWidth : 1;
   }
 
+  /* Finished strokes live on a canvas of their own. A frame then costs the
+     same whether the page holds one stroke or three hundred: blit that
+     canvas, draw the single stroke still in progress. Repainting every
+     stroke every frame is what makes writing get heavier as a page fills. */
+  var committed = document.createElement('canvas');
+  var cctx = committed.getContext('2d');
+  var committedKey = null;
+
   function sizeCanvas() {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     var w = Math.round(el.viewport.offsetWidth * dpr);
     var h = Math.round(el.viewport.offsetHeight * dpr);
     if (el.ink.width !== w || el.ink.height !== h) {
-      el.ink.width = w;
-      el.ink.height = h;
+      el.ink.width = w; el.ink.height = h;
+      committed.width = w; committed.height = h;
+      rebuild();
     }
+  }
+
+  function rebuild() {
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    cctx.clearRect(0, 0, committed.width, committed.height);
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    strokes().forEach(function (s) { paintStroke(cctx, s); });
+    committedKey = pageKey();
+  }
+
+  function redraw() {
+    sizeCanvas();
+    if (committedKey !== pageKey()) rebuild();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, el.ink.width, el.ink.height);
+    ctx.drawImage(committed, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The eraser previews correctly against this copy: destination-out on
+    // the visible canvas cuts into the committed pixels just blitted.
+    if (live) paintStroke(ctx, live);
+  }
+
+  /* ── Painting ───────────────────────────────────────────────────── */
+
+  function strokeSmooth(c, p) {
+    c.lineJoin = 'round';
+    c.lineCap = 'round';
+    if (p.length < 3) {
+      c.fillStyle = c.strokeStyle;
+      c.beginPath();
+      c.arc(p[0][0], p[0][1], c.lineWidth / 2, 0, TAU);
+      c.fill();
+      return;
+    }
+    // Quadratic through sample midpoints — the samples become control
+    // points, so the curve passes between them rather than through them.
+    c.beginPath();
+    c.moveTo(p[0][0], p[0][1]);
+    for (var i = 1; i < p.length - 1; i++) {
+      c.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+    }
+    c.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    c.stroke();
+  }
+
+  /* A variable-width stroke cannot be drawn with lineWidth, which is fixed
+     for a whole path. Instead lay a disc at each sample and a quad between
+     neighbours: opaque ink, so the overlaps cost nothing and the pieces
+     read as one tapered band. Discs and quads fill separately to keep
+     winding direction from ever subtracting one from the other. */
+  function fillRibbon(c, p) {
+    var discs = new Path2D(), band = new Path2D();
+    for (var i = 0; i < p.length; i++) {
+      var r = p[i][2] / 2;
+      discs.moveTo(p[i][0] + r, p[i][1]);
+      discs.arc(p[i][0], p[i][1], r, 0, TAU);
+
+      if (i === p.length - 1) break;
+      var x1 = p[i][0], y1 = p[i][1], x2 = p[i + 1][0], y2 = p[i + 1][1];
+      var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1e-6) continue;
+      var nx = -dy / len, ny = dx / len, r2 = p[i + 1][2] / 2;
+      band.moveTo(x1 + nx * r, y1 + ny * r);
+      band.lineTo(x2 + nx * r2, y2 + ny * r2);
+      band.lineTo(x2 - nx * r2, y2 - ny * r2);
+      band.lineTo(x1 - nx * r, y1 - ny * r);
+      band.closePath();
+    }
+    c.fill(discs);
+    c.fill(band);
   }
 
   function paintStroke(c, s) {
@@ -401,91 +483,185 @@
     if (!p || !p.length) return;
 
     c.save();
-    c.lineJoin = 'round';
-    c.lineCap = 'round';
-
     if (s.t === 'hl') {
+      // Translucent, so it must be one stroked path: overlapping fills
+      // would stack alpha and blotch where the stroke doubles back.
       c.globalAlpha = 0.4;
       c.globalCompositeOperation = 'multiply';
       c.strokeStyle = s.c;
       c.lineWidth = s.w * 5;
+      strokeSmooth(c, p);
     } else if (s.t === 'er') {
       c.globalCompositeOperation = 'destination-out';
       c.strokeStyle = '#000';
       c.lineWidth = s.w * 7;
+      strokeSmooth(c, p);
+    } else if (p[0].length > 2) {
+      c.fillStyle = s.c;
+      fillRibbon(c, p);
     } else {
-      c.strokeStyle = s.c;
+      c.strokeStyle = s.c;      // saved before per-sample widths existed
       c.lineWidth = s.w;
-    }
-
-    if (p.length < 3) {
-      c.fillStyle = c.strokeStyle;
-      c.beginPath();
-      c.arc(p[0][0], p[0][1], c.lineWidth / 2, 0, Math.PI * 2);
-      c.fill();
-    } else {
-      // Quadratic through stroke midpoints — smooths the raw pointer samples.
-      c.beginPath();
-      c.moveTo(p[0][0], p[0][1]);
-      for (var i = 1; i < p.length - 1; i++) {
-        c.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
-      }
-      c.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
-      c.stroke();
+      strokeSmooth(c, p);
     }
     c.restore();
   }
 
-  function redraw() {
-    sizeCanvas();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, el.ink.width, el.ink.height);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    strokes().forEach(function (s) { paintStroke(ctx, s); });
-    if (live) paintStroke(ctx, live);
+  /* ── Capture ────────────────────────────────────────────────────────
+     Three things separate ink from a mouse trail: keeping every sample the
+     digitizer produced rather than the one per frame the browser delivers,
+     filtering jitter without adding lag, and giving the line a width that
+     answers to the pen. */
+
+  var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
+  var BETA = 0.012;       // How quickly the filter opens up with speed.
+  var PALM_MS = 1500;     // Ignore touches for this long after a pen sample.
+
+  function LowPass() { this.y = null; }
+  LowPass.prototype.filter = function (x, a) {
+    this.y = this.y === null ? x : a * x + (1 - a) * this.y;
+    return this.y;
+  };
+
+  /* One Euro filter. A fixed low-pass has to pick a side: filter hard and
+     fast strokes lag behind the nib, filter lightly and slow strokes wobble
+     with digitizer noise. This one raises its cutoff with speed, so it is
+     smooth where you are careful and immediate where you are quick. */
+  function OneEuro(minCutoff, beta) {
+    this.min = minCutoff; this.beta = beta;
+    this.xf = new LowPass(); this.df = new LowPass();
+    this.tPrev = null; this.xPrev = 0;
+  }
+  OneEuro.prototype.alpha = function (cutoff, dt) {
+    var tau = 1 / (TAU * cutoff);
+    return 1 / (1 + tau / dt);
+  };
+  OneEuro.prototype.filter = function (x, t) {
+    if (this.tPrev === null) {
+      this.tPrev = t; this.xPrev = x; this.xf.y = x;
+      return x;
+    }
+    var dt = Math.max((t - this.tPrev) / 1000, 1e-4);
+    this.tPrev = t;
+    var d = (x - this.xPrev) / dt;
+    this.xPrev = x;
+    var dHat = this.df.filter(d, this.alpha(1, dt));
+    return this.xf.filter(x, this.alpha(this.min + this.beta * Math.abs(dHat), dt));
+  };
+
+  var fx = null, fy = null;   // position filters, one stroke's worth
+  var activeId = null;        // the single pointer that owns the stroke
+  var lastPenAt = -Infinity;
+  var lastPt = null, lastT = 0, lastW = 0;
+
+  /* The digitizer samples far faster than the screen refreshes — an Apple
+     Pencil at 240Hz against a 60Hz frame. The browser keeps the samples it
+     could not deliver individually and hands them over only if asked; skip
+     this and three quarters of the stroke is thrown away, which is what
+     makes a curve come out as a row of flat facets. */
+  function samples(e) {
+    if (e.getCoalescedEvents) {
+      var cs = e.getCoalescedEvents();
+      if (cs && cs.length) return cs;
+    }
+    return [e];
   }
 
-  function point(e) {
+  function raw(e) {
     var r = el.ink.getBoundingClientRect();
-    var s = shellScale() || 1;
-    return [
-      Math.round((e.clientX - r.left) / s * 10) / 10,
-      Math.round((e.clientY - r.top) / s * 10) / 10
-    ];
+    var sc = shellScale() || 1;
+    return [(e.clientX - r.left) / sc, (e.clientY - r.top) / sc];
   }
 
-  function commit(next) {
-    state.ink[pageKey()] = next;
-    save();
-    redraw();
+  function widthFor(e, x, y, t) {
+    var base = state.size;
+    if (e.pointerType === 'pen' && e.pressure > 0) {
+      return base * (0.35 + 1.15 * e.pressure);
+    }
+    // Nothing to read the pressure from (finger, mouse), so let speed stand
+    // in for it: a nib lays down less ink the faster it is dragged.
+    var speed = 0;
+    if (lastPt && t > lastT) {
+      speed = Math.sqrt((x - lastPt[0]) * (x - lastPt[0]) + (y - lastPt[1]) * (y - lastPt[1])) / (t - lastT);
+    }
+    return base * (1.15 - 0.45 * Math.min(speed / 2.2, 1));
+  }
+
+  function addSamples(e) {
+    var list = samples(e);
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      var t = s.timeStamp || performance.now();
+      var r = raw(s);
+      var x = fx.filter(r[0], t);
+      var y = fy.filter(r[1], t);
+      var w = widthFor(s, x, y, t);
+      lastW = lastW ? lastW * 0.6 + w * 0.4 : w;   // no visible steps in the taper
+      lastPt = [x, y];
+      lastT = t;
+      live.p.push([x, y, lastW]);
+    }
   }
 
   el.ink.addEventListener('pointerdown', function (e) {
     if (state.tool === 'cursor') return;
+    if (activeId !== null) return;   // a stroke is already running; ignore the rest
+    if (e.pointerType === 'pen') {
+      lastPenAt = e.timeStamp;
+    } else if (e.pointerType === 'touch' && e.timeStamp - lastPenAt < PALM_MS) {
+      return;                        // palm landing next to the pen
+    }
     e.preventDefault();
-    try { e.target.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
-    var t = state.tool === 'pen' ? 'p' : state.tool === 'hl' ? 'hl' : 'er';
-    live = { t: t, c: state.color, w: state.size, p: [point(e)] };
+    activeId = e.pointerId;
+    try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
+
+    fx = new OneEuro(MIN_CUTOFF, BETA);
+    fy = new OneEuro(MIN_CUTOFF, BETA);
+    lastPt = null; lastT = e.timeStamp; lastW = 0;
+
+    var tool = state.tool === 'pen' ? 'p' : state.tool === 'hl' ? 'hl' : 'er';
+    live = { t: tool, c: state.color, w: state.size, p: [] };
+    addSamples(e);
     redraw();
   });
 
   el.ink.addEventListener('pointermove', function (e) {
-    if (!live) return;
-    live.p.push(point(e));
+    if (!live || e.pointerId !== activeId) return;
+    if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+    addSamples(e);
     if (!rafPending) {
       rafPending = requestAnimationFrame(function () { rafPending = 0; redraw(); });
     }
   });
 
-  function endStroke() {
-    if (!live) return;
+  function endStroke(e) {
+    if (!live || (e && e.pointerId !== activeId)) return;
     var s = live;
     live = null;
-    commit(strokes().concat([s]));
+    activeId = null;
+
+    // Round on the way out, not on the way in — quantising during capture
+    // adds a jitter of its own for the filter to chase.
+    s.p = s.p.map(function (q) {
+      return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, Math.round(q[2] * 10) / 10];
+    });
+
+    paintStroke(cctx, s);                        // fold into the committed layer
+    state.ink[pageKey()] = strokes().concat([s]);
+    save();
+    redraw();
   }
 
   el.ink.addEventListener('pointerup', endStroke);
   el.ink.addEventListener('pointercancel', endStroke);
+  el.ink.addEventListener('lostpointercapture', endStroke);
+
+  function commit(next) {
+    state.ink[pageKey()] = next;
+    save();
+    rebuild();
+    redraw();
+  }
 
   el.btnUndo.addEventListener('click', function () { commit(strokes().slice(0, -1)); });
   el.btnClear.addEventListener('click', function () { commit([]); });

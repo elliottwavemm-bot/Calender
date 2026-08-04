@@ -121,6 +121,51 @@ and reloaded on the next visit; `Clear` empties the current page only.
 Strokes are stored in the shell's own coordinate space, not screen pixels, so
 they stay put when the window is resized or the shell is scaled down to fit.
 
+### How the ink is captured
+
+Four things separate ink that feels like a pen from a mouse trail:
+
+**Every sample, not one per frame.** A digitizer runs far faster than the
+screen refreshes — an Apple Pencil at 240Hz against a 60Hz frame. The browser
+keeps the samples it could not deliver on their own and hands them over only
+if asked, through `getCoalescedEvents()`. Without it three quarters of a
+stroke is discarded, which is what turns a curve into a row of flat facets.
+
+**A filter that does not trade lag for steadiness.** Raw positions carry
+digitizer noise that shows up as wobble in slow, careful strokes. A fixed
+low-pass has to pick a side: filter hard and fast strokes lag behind the nib,
+filter lightly and slow ones shake. The [One Euro
+filter](https://gery.casiez.net/1euro/) raises its cutoff with speed, so it is
+smooth where you are careful and immediate where you are quick. `MIN_CUTOFF`
+and `BETA` in `app.js` tune it.
+
+**A width that answers to the pen.** With a stylus the line follows
+`pointerEvent.pressure`. With a finger or a mouse there is no pressure to
+read, so speed stands in for it — a nib lays down less ink the faster it is
+dragged. `lineWidth` is fixed for a whole path, so a variable-width stroke
+cannot be stroked; it is filled instead, as a disc at each sample plus a quad
+between neighbours. The highlighter keeps a constant width and stays a single
+stroked path, because overlapping translucent fills would stack alpha and
+blotch wherever a stroke doubles back.
+
+**A frame that costs the same at stroke 300 as at stroke 1.** Finished
+strokes are folded into an offscreen canvas; a frame blits that and draws only
+the stroke still in progress. Repainting every stroke every frame is what
+makes writing grow heavier as a page fills:
+
+| strokes on the page | repaint every stroke | blit + live stroke |
+| ---: | ---: | ---: |
+| 25 | 6.8ms | 3.6ms |
+| 100 | 18.2ms | 3.6ms |
+| 400 | 65.8ms | 3.9ms |
+
+(per frame, measured with a GPU sync point after each; 60fps allows 16.7ms.)
+
+Alongside those: `desynchronized: true` on the canvas context to skip a
+compositing step, one pointer owning a stroke so a second finger cannot
+corrupt it, and touches ignored for 1.5s after a pen sample so a resting palm
+does not draw.
+
 ## Configuration
 
 At the top of `assets/js/app.js`:
