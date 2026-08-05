@@ -246,6 +246,39 @@ At the top of `assets/js/app.js`:
 
 The grid shows 12 hours from `startHour`, one hour per 56px row.
 
+## วันหยุดและวันสำคัญไทย
+
+`assets/js/holidays.js` marks Thai holidays and notable days. Two kinds, and
+the difference is visible:
+
+- **วันหยุดราชการ** — a day off. Red chip, and the day number goes red, the way
+  Thai calendars print them. A holiday landing on a weekend earns its
+  วันหยุดชดเชย on the next working day.
+- **วันสำคัญ** — worth marking, but an ordinary working day. Neutral chip, day
+  number unchanged.
+
+Solar dates are rules and hold for any year, วันเด็กแห่งชาติ included (second
+Saturday of January). The Buddhist days — มาฆบูชา, วิสาขบูชา, อาสาฬหบูชา,
+เข้าพรรษา, ออกพรรษา, ลอยกระทง — follow the lunar calendar, move every year, and
+are fixed by government announcement, so they are a table rather than a
+formula:
+
+```js
+var LUNAR = {
+  2026: { makha: '03-03', visakha: '05-31', asalha: '07-29', ... }
+};
+```
+
+**A year missing from that table shows no Buddhist days at all**, which is
+deliberate: a calendar with the wrong Makha Bucha on it is worse than one that
+admits it does not know. Add a year by copying its announced dates in; nothing
+else needs touching. Set `showHolidays: false` in `app.js` to turn the whole
+lot off.
+
+Thai text is set in Noto Sans Thai, subset to the Thai block and shipped with
+the repo like the others — one variable file covers 400–700, since Google
+serves identical bytes across that range.
+
 ## Events
 
 `assets/js/events.js` maps a local date to a list of entries:

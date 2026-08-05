@@ -14,7 +14,8 @@
   var CONFIG = {
     paperTexture: 'dots',
     weekStart: 'monday',
-    startHour: 8
+    startHour: 8,
+    showHolidays: true
   };
 
   var STORAGE_KEY = 'inkling-ink';
@@ -51,6 +52,7 @@
   var NIBS = [{ w: 2, d: '5px' }, { w: 4, d: '8px' }, { w: 7, d: '12px' }];
 
   var EVENTS = window.INKLING_EVENTS || {};
+  var HOLIDAYS = window.INKLING_HOLIDAYS || null;
 
   var now = new Date();
   var state = {
@@ -118,10 +120,29 @@
 
   function eventsOn(dtKey) { return EVENTS[dtKey] || []; }
 
+  function holidaysOn(dtKey) {
+    if (!CONFIG.showHolidays || !HOLIDAYS) return [];
+    var year = +dtKey.slice(0, 4);
+    var found = HOLIDAYS.forYear(year)[dtKey];
+    if (!found) return [];
+    return found.map(function (h) { return { n: h.n, c: h.pub ? 'h' : 'o' }; });
+  }
+
+  /* Holidays first: they are the day's context, and what you planned sits
+     under it. Both are all-day, so they share the same shape. */
+  function allOn(dtKey) { return holidaysOn(dtKey).concat(eventsOn(dtKey)); }
+
+  function isDayOff(dtKey) {
+    if (!CONFIG.showHolidays || !HOLIDAYS) return false;
+    var found = HOLIDAYS.forYear(+dtKey.slice(0, 4))[dtKey];
+    return !!found && found.some(function (h) { return h.pub; });
+  }
+
   function eventColors(c) {
-    return c === 'b'
-      ? { bg: 'var(--color-accent-2-200)', fg: 'var(--color-accent-2-800)' }
-      : { bg: 'var(--color-accent-200)', fg: 'var(--color-accent-800)' };
+    if (c === 'h') return { bg: 'var(--color-red-200)', fg: 'var(--color-red-800)' };
+    if (c === 'o') return { bg: 'var(--color-neutral-200)', fg: 'var(--color-neutral-700)' };
+    if (c === 'b') return { bg: 'var(--color-accent-2-200)', fg: 'var(--color-accent-2-800)' };
+    return { bg: 'var(--color-accent-200)', fg: 'var(--color-accent-800)' };
   }
 
   /* ── DOM helpers ────────────────────────────────────────────────── */
@@ -170,14 +191,17 @@
       var k = key(dt);
       var inMonth = dt.getMonth() === state.m;
       var isToday = k === today;
-      var all = eventsOn(k);
+      var all = allOn(k);
 
       var cell = node('div', 'cell');
       cell.style.background = inMonth ? 'var(--color-neutral-100)' : 'transparent';
 
       var num = node('span', 'daynum', dt.getDate());
       num.style.background = isToday ? 'var(--color-accent)' : 'transparent';
-      num.style.color = isToday ? '#fff' : inMonth ? 'var(--color-text)' : 'var(--color-neutral-400)';
+      // Thai calendars print days off in red. Today keeps its filled pill.
+      num.style.color = isToday ? '#fff'
+        : !inMonth ? 'var(--color-neutral-400)'
+        : isDayOff(k) ? 'var(--color-red-500)' : 'var(--color-text)';
       cell.appendChild(num);
 
       all.slice(0, MAX_CHIPS).forEach(function (e) {
@@ -261,12 +285,12 @@
 
       var num = node('span', 'col-daynum', dt.getDate());
       num.style.background = isToday ? 'var(--color-accent)' : 'transparent';
-      num.style.color = isToday ? '#fff' : 'var(--color-text)';
+      num.style.color = isToday ? '#fff' : isDayOff(k) ? 'var(--color-red-500)' : 'var(--color-text)';
       head.appendChild(num);
       col.appendChild(head);
 
       var track = node('div', 'track');
-      fillTrack(track, eventsOn(k), false);
+      fillTrack(track, allOn(k), false);
       col.appendChild(track);
 
       el.weekCols.appendChild(col);
@@ -282,10 +306,10 @@
 
     el.dayNum.textContent = state.d;
     el.dayNum.style.background = isToday ? 'var(--color-accent)' : 'transparent';
-    el.dayNum.style.color = isToday ? '#fff' : 'var(--color-text)';
+    el.dayNum.style.color = isToday ? '#fff' : isDayOff(k) ? 'var(--color-red-500)' : 'var(--color-text)';
     el.dayName.textContent = WEEKDAYS[cur.getDay()];
 
-    fillTrack(el.dayTrack, eventsOn(k), true);
+    fillTrack(el.dayTrack, allOn(k), true);
   }
 
   function renderNotes() {
