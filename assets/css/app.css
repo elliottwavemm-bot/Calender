@@ -11,6 +11,20 @@
   --head-h: 50px;   /* column header — the gutter's zero point */
 }
 
+/* Nothing here is meant to be selected — it is a calendar you draw on, not a
+   document you quote from. Without this a long press on iOS selects the whole
+   month and raises the copy/translate callout over it, which lands right in
+   the way of drawing. `touch-action: manipulation` drops the double-tap-to-
+   zoom gesture too; the canvas keeps its stricter `none`. */
+body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 .stage {
   min-height: 100vh;
   display: flex;

@@ -136,14 +136,14 @@ terracotta pill.
 
 ## Ink
 
-The toolbar sits over every view: select, pen, highlighter, eraser, five ink
+The toolbar sits over every view: pan, pen, highlighter, eraser, five ink
 colours, three nib sizes, undo and clear.
 
 The colours are ink black, terracotta, olive, warm grey and red. The red is
 pitched to the same warmth and saturation as the terracotta beside it — far
 enough round the wheel to read as red rather than a second orange.
 
-- **Select** turns off drawing so the page underneath takes clicks again.
+- **Pan** turns off drawing, so one finger moves the page instead of marking it.
 - **Highlighter** draws at 5× the nib width, translucent, in `multiply` — it
   tints what's under it instead of covering it.
 - **Eraser** rubs out at 7× the nib width using `destination-out`, so it cuts
@@ -162,9 +162,14 @@ they stay put when the window is resized or the shell is scaled down to fit.
 
 Pinch with two fingers, or hold ctrl/⌘ and scroll, to magnify up to 6× — far
 enough to write a note inside a single day's cell. The pill at the bottom left
-shows the level and resets it. With the select tool one finger pans; with any
-drawing tool two fingers do, since a second finger landing means a pinch and
-cancels whatever the first was drawing rather than leaving a stray mark.
+shows the level and resets it. With the pan tool one finger moves the page;
+with any drawing tool two fingers do, since a second finger landing means a
+pinch and cancels whatever the first was drawing rather than leaving a stray
+mark.
+
+Text selection is off throughout. Nothing here is meant to be quoted from, and
+on iOS a long press over the calendar otherwise selects the whole month and
+raises the copy/translate callout right where you were about to draw.
 
 Three things make it usable rather than just bigger:
 
