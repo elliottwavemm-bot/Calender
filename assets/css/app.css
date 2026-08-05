@@ -356,6 +356,28 @@
 .zoom-pill:hover { background: var(--color-neutral-200); }
 .zoom-pill[hidden] { display: none; }
 
+/* Sits above the page rather than beside the toolbar: it is an
+   announcement, not another tool, and the bottom edge is already busy. */
+.update-pill {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.update-pill:hover { background: var(--color-accent-600); }
+.update-pill:disabled { opacity: 0.7; cursor: default; }
+.update-pill[hidden] { display: none; }
+
 /* ── Toolbar ────────────────────────────────────────────────────────── */
 
 /* Anchored to both edges rather than centred on one: a `left: 50%` box only

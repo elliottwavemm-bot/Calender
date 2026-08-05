@@ -65,7 +65,8 @@
   ['navTitle', 'btnToday', 'viewport', 'viewMonth', 'viewWeek', 'viewDay',
     'viewNotes', 'monthHead', 'monthGrid', 'weekGutter', 'weekCols',
     'dayGutter', 'dayTrack', 'dayNum', 'dayName', 'notesLabel', 'ink',
-    'palette', 'nibs', 'btnUndo', 'btnClear', 'device', 'zoomable', 'zoomPill'
+    'palette', 'nibs', 'btnUndo', 'btnClear', 'device', 'zoomable', 'zoomPill',
+    'updatePill'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // `desynchronized` lets the browser skip a compositing step and put ink on
@@ -911,11 +912,66 @@
     resizeTimer = setTimeout(render, 120);
   });
 
+  /* ── Offline, and updates that land in place ────────────────────────
+     A service worker keeps the whole app on the device, so it opens with no
+     network at all, and lets a new version replace the installed one without
+     removing and re-adding the home-screen icon.
+
+     Only the hosted site registers one. The single-file build has no origin
+     to serve a worker from, and build.py strips its manifest link — which is
+     what this checks for. */
+
+  var swReg = null;
+
+  function offerUpdate() {
+    el.updatePill.hidden = false;
+    el.updatePill.onclick = function () {
+      el.updatePill.disabled = true;
+      el.updatePill.textContent = 'Updating…';
+      if (swReg && swReg.waiting) swReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    };
+  }
+
+  function watchWorker(reg) {
+    var sw = reg.installing;
+    if (!sw) return;
+    sw.addEventListener('statechange', function () {
+      // Installed *while a worker already controls the page* means this is an
+      // update rather than the first visit, which needs no announcement.
+      if (sw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate();
+    });
+  }
+
+  function registerWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (!document.querySelector('link[rel="manifest"]')) return;
+
+    var reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloading) return;   // controllerchange can fire more than once
+      reloading = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      swReg = reg;
+      if (reg.waiting && navigator.serviceWorker.controller) offerUpdate();
+      reg.addEventListener('updatefound', function () { watchWorker(reg); });
+    }).catch(function () { /* offline support is a bonus, never a blocker */ });
+
+    // A home-screen app can sit suspended for days. Check on the way back in
+    // rather than only on a cold start.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && swReg) swReg.update();
+    });
+  }
+
   /* ── Boot ───────────────────────────────────────────────────────── */
 
   load();
   applyPaper();
   applyTransform();
+  registerWorker();
   fit();
   render();
   // Fonts land after first paint and can nudge layout; redraw once settled.

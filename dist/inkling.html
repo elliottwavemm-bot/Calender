@@ -568,6 +568,28 @@ img { display: block; max-width: 100%; }
 .zoom-pill:hover { background: var(--color-neutral-200); }
 .zoom-pill[hidden] { display: none; }
 
+/* Sits above the page rather than beside the toolbar: it is an
+   announcement, not another tool, and the bottom edge is already busy. */
+.update-pill {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.update-pill:hover { background: var(--color-accent-600); }
+.update-pill:disabled { opacity: 0.7; cursor: default; }
+.update-pill[hidden] { display: none; }
+
 /* ── Toolbar ────────────────────────────────────────────────────────── */
 
 /* Anchored to both edges rather than centred on one: a `left: 50%` box only
@@ -809,6 +831,7 @@ img { display: block; max-width: 100%; }
         <canvas id="ink" data-tool="pen"></canvas>
 
         <button class="zoom-pill" id="zoomPill" hidden>100%</button>
+        <button class="update-pill" id="updatePill" hidden>Update ready — tap to reload</button>
 
         <div class="toolbar" role="toolbar" aria-label="Ink tools">
           <button class="btn btn-icon btn-ghost" data-tool="cursor" aria-label="Select mode">
@@ -933,7 +956,8 @@ window.INKLING_EVENTS = {
   ['navTitle', 'btnToday', 'viewport', 'viewMonth', 'viewWeek', 'viewDay',
     'viewNotes', 'monthHead', 'monthGrid', 'weekGutter', 'weekCols',
     'dayGutter', 'dayTrack', 'dayNum', 'dayName', 'notesLabel', 'ink',
-    'palette', 'nibs', 'btnUndo', 'btnClear', 'device', 'zoomable', 'zoomPill'
+    'palette', 'nibs', 'btnUndo', 'btnClear', 'device', 'zoomable', 'zoomPill',
+    'updatePill'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // `desynchronized` lets the browser skip a compositing step and put ink on
@@ -1779,11 +1803,66 @@ window.INKLING_EVENTS = {
     resizeTimer = setTimeout(render, 120);
   });
 
+  /* ── Offline, and updates that land in place ────────────────────────
+     A service worker keeps the whole app on the device, so it opens with no
+     network at all, and lets a new version replace the installed one without
+     removing and re-adding the home-screen icon.
+
+     Only the hosted site registers one. The single-file build has no origin
+     to serve a worker from, and build.py strips its manifest link — which is
+     what this checks for. */
+
+  var swReg = null;
+
+  function offerUpdate() {
+    el.updatePill.hidden = false;
+    el.updatePill.onclick = function () {
+      el.updatePill.disabled = true;
+      el.updatePill.textContent = 'Updating…';
+      if (swReg && swReg.waiting) swReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    };
+  }
+
+  function watchWorker(reg) {
+    var sw = reg.installing;
+    if (!sw) return;
+    sw.addEventListener('statechange', function () {
+      // Installed *while a worker already controls the page* means this is an
+      // update rather than the first visit, which needs no announcement.
+      if (sw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate();
+    });
+  }
+
+  function registerWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (!document.querySelector('link[rel="manifest"]')) return;
+
+    var reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloading) return;   // controllerchange can fire more than once
+      reloading = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      swReg = reg;
+      if (reg.waiting && navigator.serviceWorker.controller) offerUpdate();
+      reg.addEventListener('updatefound', function () { watchWorker(reg); });
+    }).catch(function () { /* offline support is a bonus, never a blocker */ });
+
+    // A home-screen app can sit suspended for days. Check on the way back in
+    // rather than only on a cold start.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && swReg) swReg.update();
+    });
+  }
+
   /* ── Boot ───────────────────────────────────────────────────────── */
 
   load();
   applyPaper();
   applyTransform();
+  registerWorker();
   fit();
   render();
   // Fonts land after first paint and can nudge layout; redraw once settled.

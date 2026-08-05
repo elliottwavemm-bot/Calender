@@ -58,6 +58,39 @@ Regenerate the PNGs from the mark with `tools/make-icons.js` (needs Playwright).
 Note that this only applies to the site served from this repository. A copy
 embedded in someone else's page takes that page's touch icon, not this one.
 
+iOS copies the touch icon at the moment you add the app and never fetches it
+again, so changing the icon means removing and re-adding. Changing the *app*
+does not — see below.
+
+## Offline, and updates in place
+
+`sw.js` is a service worker that precaches the whole app, so it opens with no
+network at all, and replaces itself when a new version ships — the home-screen
+app updates without being removed and re-added.
+
+`build.py` stamps the worker with a hash of everything it caches, plus the
+worker's own logic. That matters both ways: browsers only install a worker
+whose file differs byte for byte, so without the stamp a deploy would ship
+files no installed client ever asks for; and a fix to the worker itself has to
+reach clients even when no cached asset changed.
+
+The update is deliberately not silent. A new worker installs in the background
+and then waits — taking over a running page can pair new HTML with scripts the
+old page already loaded. The page notices the waiting worker, shows a pill at
+the top, and only on a tap does the worker take over and the page reload.
+Drawings are in `localStorage` and survive it. The app also re-checks on
+returning to the foreground, since a home-screen app can sit suspended for
+days between cold starts.
+
+One subtlety worth knowing: the precache uses `new Request(url, {cache:
+'reload'})`. A plain `cache.addAll` may satisfy itself from the HTTP cache and
+hand back the very files the update exists to replace — the cache name changes,
+the contents do not, and the update silently does nothing.
+
+Only the hosted site registers a worker. The single-file build has no origin to
+serve one from; `build.py` strips its manifest link, which is what the
+registration checks for.
+
 ## Building a single file
 
 `build.py` folds the stylesheets, scripts and woff2 faces (as data URIs) into
