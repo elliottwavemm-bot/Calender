@@ -742,11 +742,11 @@ img { display: block; max-width: 100%; }
 /* On a phone the group separators cost more width than the grouping is
    worth — dropping them keeps all twelve controls on a single row. */
 @media (max-width: 520px) {
-  .toolbar { gap: 2px; padding: 6px 8px; }
+  .toolbar { gap: 2px; padding: 6px; }
   .toolbar-sep { display: none; }
-  .toolbar .btn-icon { width: 28px; height: 28px; }
-  .swatch { width: 18px; height: 18px; }
-  .nib { width: 20px; height: 20px; }
+  .toolbar .btn-icon { width: 26px; height: 26px; }
+  .swatch { width: 17px; height: 17px; }
+  .nib { width: 19px; height: 19px; }
   #palette, #nibs { gap: 2px !important; }
 }
 
@@ -934,7 +934,11 @@ window.INKLING_EVENTS = {
   var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
     'Friday', 'Saturday'];
 
-  var PALETTE = ['#201e1d', '#c67139', '#7a8a5e', '#82796a'];
+  /* Ink, terracotta, olive, warm grey, red. The red is pitched to the same
+     warmth and saturation as the terracotta beside it — far enough round the
+     wheel to read as red rather than a second orange, and dark enough on the
+     paper to be the colour you reach for to mark something. */
+  var PALETTE = ['#201e1d', '#c67139', '#7a8a5e', '#82796a', '#b0392e'];
   var NIBS = [{ w: 2, d: '5px' }, { w: 4, d: '8px' }, { w: 7, d: '12px' }];
 
   var EVENTS = window.INKLING_EVENTS || {};

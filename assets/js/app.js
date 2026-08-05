@@ -43,7 +43,11 @@
   var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
     'Friday', 'Saturday'];
 
-  var PALETTE = ['#201e1d', '#c67139', '#7a8a5e', '#82796a'];
+  /* Ink, terracotta, olive, warm grey, red. The red is pitched to the same
+     warmth and saturation as the terracotta beside it — far enough round the
+     wheel to read as red rather than a second orange, and dark enough on the
+     paper to be the colour you reach for to mark something. */
+  var PALETTE = ['#201e1d', '#c67139', '#7a8a5e', '#82796a', '#b0392e'];
   var NIBS = [{ w: 2, d: '5px' }, { w: 4, d: '8px' }, { w: 7, d: '12px' }];
 
   var EVENTS = window.INKLING_EVENTS || {};

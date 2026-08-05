@@ -530,11 +530,11 @@
 /* On a phone the group separators cost more width than the grouping is
    worth — dropping them keeps all twelve controls on a single row. */
 @media (max-width: 520px) {
-  .toolbar { gap: 2px; padding: 6px 8px; }
+  .toolbar { gap: 2px; padding: 6px; }
   .toolbar-sep { display: none; }
-  .toolbar .btn-icon { width: 28px; height: 28px; }
-  .swatch { width: 18px; height: 18px; }
-  .nib { width: 20px; height: 20px; }
+  .toolbar .btn-icon { width: 26px; height: 26px; }
+  .swatch { width: 17px; height: 17px; }
+  .nib { width: 19px; height: 19px; }
   #palette, #nibs { gap: 2px !important; }
 }
 

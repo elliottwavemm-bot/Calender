@@ -136,8 +136,12 @@ terracotta pill.
 
 ## Ink
 
-The toolbar sits over every view: select, pen, highlighter, eraser, four ink
+The toolbar sits over every view: select, pen, highlighter, eraser, five ink
 colours, three nib sizes, undo and clear.
+
+The colours are ink black, terracotta, olive, warm grey and red. The red is
+pitched to the same warmth and saturation as the terracotta beside it — far
+enough round the wheel to read as red rather than a second orange.
 
 - **Select** turns off drawing so the page underneath takes clicks again.
 - **Highlighter** draws at 5× the nib width, translucent, in `multiply` — it
