@@ -65,7 +65,7 @@
   ['navTitle', 'btnToday', 'viewport', 'viewMonth', 'viewWeek', 'viewDay',
     'viewNotes', 'monthHead', 'monthGrid', 'weekGutter', 'weekCols',
     'dayGutter', 'dayTrack', 'dayNum', 'dayName', 'notesLabel', 'ink',
-    'palette', 'nibs', 'btnUndo', 'btnClear', 'device'
+    'palette', 'nibs', 'btnUndo', 'btnClear', 'device', 'zoomable', 'zoomPill'
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // `desynchronized` lets the browser skip a compositing step and put ink on
@@ -389,6 +389,61 @@
     return el.viewport.offsetWidth ? r.width / el.viewport.offsetWidth : 1;
   }
 
+  /* ── Zoom and pan ───────────────────────────────────────────────────
+     The page can be magnified to write small — a note inside one day's
+     cell. The views are a CSS transform (vector, so type stays sharp) and
+     the ink is redrawn with the same transform baked into the context, so
+     it is re-rasterised at the new scale rather than blown up as pixels.
+
+     Strokes are always stored in page coordinates, unzoomed. Zoom is a way
+     of looking at the page, never part of what is on it. */
+
+  var MIN_ZOOM = 1, MAX_ZOOM = 6;
+  var zoom = 1, panX = 0, panY = 0;
+
+  /* Stage space: CSS pixels of the viewport, after undoing the device
+     frame's own scaling. Page space: stage space with zoom and pan undone. */
+  function toStage(e) {
+    var r = el.viewport.getBoundingClientRect();
+    var sc = shellScale() || 1;
+    return { x: (e.clientX - r.left) / sc, y: (e.clientY - r.top) / sc };
+  }
+  function toPage(st) {
+    return { x: (st.x - panX) / zoom, y: (st.y - panY) / zoom };
+  }
+
+  function clampPan() {
+    // Never let the page pull away from the edges of its own window.
+    var w = el.viewport.offsetWidth, h = el.viewport.offsetHeight;
+    panX = Math.min(0, Math.max(-w * (zoom - 1), panX));
+    panY = Math.min(0, Math.max(-h * (zoom - 1), panY));
+  }
+
+  function applyTransform() {
+    el.zoomable.style.transform =
+      'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    var pct = Math.round(zoom * 100);
+    el.zoomPill.textContent = pct + '%';
+    el.zoomPill.hidden = zoom <= 1.001;
+  }
+
+  /* Zoom about a fixed stage point, so the spot under the fingers stays
+     under the fingers. */
+  function zoomAt(st, next) {
+    var pg = toPage(st);
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+    panX = st.x - pg.x * zoom;
+    panY = st.y - pg.y * zoom;
+    clampPan();
+    applyTransform();
+  }
+
+  function resetZoom() {
+    zoom = 1; panX = 0; panY = 0;
+    applyTransform();
+    redraw();
+  }
+
   /* Finished strokes live on a canvas of their own. A frame then costs the
      same whether the page holds one stroke or three hundred: blit that
      canvas, draw the single stroke still in progress. Repainting every
@@ -404,25 +459,36 @@
     if (el.ink.width !== w || el.ink.height !== h) {
       el.ink.width = w; el.ink.height = h;
       committed.width = w; committed.height = h;
-      rebuild();
+      committedKey = null;   // the bitmap is gone; redraw() will repaint it
     }
+  }
+
+  /* What the committed bitmap currently shows: which page, at which
+     transform. Any change to either means it has to be drawn again. */
+  function viewKey() {
+    return pageKey() + '@' + zoom.toFixed(4) + ',' + Math.round(panX) + ',' + Math.round(panY);
+  }
+
+  function inkTransform(c) {
+    var k = dpr * zoom;
+    c.setTransform(k, 0, 0, k, dpr * panX, dpr * panY);
   }
 
   function rebuild() {
     cctx.setTransform(1, 0, 0, 1, 0, 0);
     cctx.clearRect(0, 0, committed.width, committed.height);
-    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    inkTransform(cctx);
     strokes().forEach(function (s) { paintStroke(cctx, s); });
-    committedKey = pageKey();
+    committedKey = viewKey();
   }
 
   function redraw() {
     sizeCanvas();
-    if (committedKey !== pageKey()) rebuild();
+    if (committedKey !== viewKey()) rebuild();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, el.ink.width, el.ink.height);
     ctx.drawImage(committed, 0, 0);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    inkTransform(ctx);
     // The eraser previews correctly against this copy: destination-out on
     // the visible canvas cuts into the committed pixels just blitted.
     if (live) paintStroke(ctx, live);
@@ -567,14 +633,10 @@
     return [e];
   }
 
-  function raw(e) {
-    var r = el.ink.getBoundingClientRect();
-    var sc = shellScale() || 1;
-    return [(e.clientX - r.left) / sc, (e.clientY - r.top) / sc];
-  }
-
   function widthFor(e, x, y, t) {
-    var base = state.size;
+    // The nib keeps its size on screen, so zooming in writes finer on the
+    // page — which is the point of zooming in to write.
+    var base = state.size / zoom;
     if (e.pointerType === 'pen' && e.pressure > 0) {
       return base * (0.35 + 1.15 * e.pressure);
     }
@@ -587,47 +649,142 @@
     return base * (1.15 - 0.45 * Math.min(speed / 2.2, 1));
   }
 
+  /* Filtering happens in stage space — screen pixels — not page space. The
+     jitter being removed is physical, a property of the digitizer and the
+     hand, so its scale does not change when the page is magnified. Filtering
+     page coordinates instead would make the filter treat every stroke as
+     slow at high zoom and smear it, which is the opposite of what zooming in
+     to write is for. Only once filtered are samples mapped onto the page. */
   function addSamples(e) {
     var list = samples(e);
     for (var i = 0; i < list.length; i++) {
       var s = list[i];
       var t = s.timeStamp || performance.now();
-      var r = raw(s);
-      var x = fx.filter(r[0], t);
-      var y = fy.filter(r[1], t);
+      var st = toStage(s);
+      var x = fx.filter(st.x, t);
+      var y = fy.filter(st.y, t);
       var w = widthFor(s, x, y, t);
       lastW = lastW ? lastW * 0.6 + w * 0.4 : w;   // no visible steps in the taper
       lastPt = [x, y];
       lastT = t;
-      live.p.push([x, y, lastW]);
+      var pg = toPage({ x: x, y: y });
+      live.p.push([pg.x, pg.y, lastW]);
     }
   }
 
+  /* ── Pointers ───────────────────────────────────────────────────────
+     One pointer draws (or pans, with the select tool). Two pointers are a
+     pinch, never a stroke — so a second finger landing cancels whatever the
+     first was drawing rather than leaving a stray mark behind. */
+
+  var pointers = new Map();   // every pointer currently down, in stage space
+  var gesture = null;         // pinch in progress
+  var panning = null;         // one-finger pan with the select tool
+
+  function abortStroke() {
+    if (!live) return;
+    live = null;
+    activeId = null;
+    redraw();
+  }
+
+  function beginGesture() {
+    var pts = Array.from(pointers.values());
+    var a = pts[0], b = pts[1];
+    gesture = {
+      dist: Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1),
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      zoom: zoom, panX: panX, panY: panY,
+      // What the committed bitmap already shows. During the pinch the canvas
+      // is shifted with a CSS transform instead of being redrawn every
+      // frame; it is re-rasterised once, at the end, when it settles.
+      renderZoom: zoom, renderX: panX, renderY: panY
+    };
+  }
+
+  function updateGesture() {
+    var pts = Array.from(pointers.values());
+    if (pts.length < 2) return;
+    var a = pts[0], b = pts[1];
+    var dist = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1);
+    var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.zoom * (dist / gesture.dist)));
+    // Hold the page point that started under the fingers under them still,
+    // which folds the pan of a two-finger drag into the same maths.
+    var pg = {
+      x: (gesture.mid.x - gesture.panX) / gesture.zoom,
+      y: (gesture.mid.y - gesture.panY) / gesture.zoom
+    };
+    panX = mid.x - pg.x * zoom;
+    panY = mid.y - pg.y * zoom;
+    clampPan();
+    applyTransform();
+
+    var k = zoom / gesture.renderZoom;
+    el.ink.style.transform =
+      'translate(' + (panX - k * gesture.renderX) + 'px,' + (panY - k * gesture.renderY) + 'px) scale(' + k + ')';
+  }
+
+  function endGesture() {
+    gesture = null;
+    el.ink.style.transform = '';
+    redraw();                 // back to crisp ink at the settled scale
+  }
+
   el.ink.addEventListener('pointerdown', function (e) {
-    if (state.tool === 'cursor') return;
-    if (activeId !== null) return;   // a stroke is already running; ignore the rest
-    if (e.pointerType === 'pen') {
-      lastPenAt = e.timeStamp;
-    } else if (e.pointerType === 'touch' && e.timeStamp - lastPenAt < PALM_MS) {
-      return;                        // palm landing next to the pen
+    pointers.set(e.pointerId, toStage(e));
+    if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+
+    if (pointers.size === 2) {
+      abortStroke();
+      panning = null;
+      try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
+      beginGesture();
+      return;
     }
+    if (pointers.size > 2) return;
+
     e.preventDefault();
-    activeId = e.pointerId;
     try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
 
+    if (state.tool === 'cursor') {
+      panning = { id: e.pointerId, x: toStage(e).x - panX, y: toStage(e).y - panY };
+      return;
+    }
+    if (activeId !== null) return;
+    if (e.pointerType === 'touch' && e.timeStamp - lastPenAt < PALM_MS) return;
+
+    activeId = e.pointerId;
     fx = new OneEuro(MIN_CUTOFF, BETA);
     fy = new OneEuro(MIN_CUTOFF, BETA);
     lastPt = null; lastT = e.timeStamp; lastW = 0;
 
     var tool = state.tool === 'pen' ? 'p' : state.tool === 'hl' ? 'hl' : 'er';
-    live = { t: tool, c: state.color, w: state.size, p: [] };
+    live = { t: tool, c: state.color, w: state.size / zoom, p: [] };
     addSamples(e);
     redraw();
   });
 
   el.ink.addEventListener('pointermove', function (e) {
-    if (!live || e.pointerId !== activeId) return;
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, toStage(e));
     if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+
+    if (gesture) { updateGesture(); return; }
+
+    if (panning && e.pointerId === panning.id) {
+      var st = toStage(e);
+      panX = st.x - panning.x;
+      panY = st.y - panning.y;
+      clampPan();
+      applyTransform();
+      if (!rafPending) {
+        rafPending = requestAnimationFrame(function () { rafPending = 0; redraw(); });
+      }
+      return;
+    }
+
+    if (!live || e.pointerId !== activeId) return;
     addSamples(e);
     if (!rafPending) {
       rafPending = requestAnimationFrame(function () { rafPending = 0; redraw(); });
@@ -635,6 +792,11 @@
   });
 
   function endStroke(e) {
+    if (e) pointers.delete(e.pointerId);
+
+    if (gesture && pointers.size < 2) endGesture();
+    if (panning && (!e || e.pointerId === panning.id)) panning = null;
+
     if (!live || (e && e.pointerId !== activeId)) return;
     var s = live;
     live = null;
@@ -643,7 +805,7 @@
     // Round on the way out, not on the way in — quantising during capture
     // adds a jitter of its own for the filter to chase.
     s.p = s.p.map(function (q) {
-      return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, Math.round(q[2] * 10) / 10];
+      return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, Math.round(q[2] * 100) / 100];
     });
 
     paintStroke(cctx, s);                        // fold into the committed layer
@@ -655,6 +817,18 @@
   el.ink.addEventListener('pointerup', endStroke);
   el.ink.addEventListener('pointercancel', endStroke);
   el.ink.addEventListener('lostpointercapture', endStroke);
+
+  /* Trackpad pinch and ctrl+wheel both arrive here. */
+  el.ink.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    zoomAt(toStage(e), zoom * Math.exp(-e.deltaY * 0.01));
+    if (!rafPending) {
+      rafPending = requestAnimationFrame(function () { rafPending = 0; redraw(); });
+    }
+  }, { passive: false });
+
+  el.zoomPill.addEventListener('click', resetZoom);
 
   function commit(next) {
     state.ink[pageKey()] = next;
@@ -699,6 +873,10 @@
     r.addEventListener('change', function () {
       if (!r.checked) return;
       state.view = r.value;
+      // The layouts are unrelated; a zoom carried over from one lands in an
+      // arbitrary corner of the next. Navigating within a view keeps it.
+      zoom = 1; panX = 0; panY = 0;
+      applyTransform();
       render();
     });
   });
@@ -737,6 +915,7 @@
 
   load();
   applyPaper();
+  applyTransform();
   fit();
   render();
   // Fonts land after first paint and can nudge layout; redraw once settled.

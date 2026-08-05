@@ -121,6 +121,37 @@ and reloaded on the next visit; `Clear` empties the current page only.
 Strokes are stored in the shell's own coordinate space, not screen pixels, so
 they stay put when the window is resized or the shell is scaled down to fit.
 
+### Zoom
+
+Pinch with two fingers, or hold ctrl/⌘ and scroll, to magnify up to 6× — far
+enough to write a note inside a single day's cell. The pill at the bottom left
+shows the level and resets it. With the select tool one finger pans; with any
+drawing tool two fingers do, since a second finger landing means a pinch and
+cancels whatever the first was drawing rather than leaving a stray mark.
+
+Three things make it usable rather than just bigger:
+
+**The ink is redrawn, not blown up.** The views are magnified with a CSS
+transform, so type stays vector-sharp; the ink is re-rasterised with the same
+transform baked into the canvas context. Scaling the canvas bitmap instead
+would give soft, pixelated strokes exactly where the detail is wanted. During
+a pinch the canvas *is* shifted as a bitmap — one cheap CSS transform per
+frame instead of repainting every stroke — and re-rasterised once when the
+gesture settles.
+
+**The nib keeps its size on screen.** Stroke width is divided by the zoom, so
+magnifying the page writes finer on it. Without that, zooming in to write
+small would produce strokes as fat as the cell.
+
+**Smoothing stays in screen space.** The filter below runs on stage
+coordinates, before they are mapped onto the page. Jitter is physical — it
+comes from the digitizer and the hand — so its scale does not change when the
+page is magnified. Filtering page coordinates instead makes every stroke look
+slow to the filter at high zoom, and it smears them.
+
+Strokes are always stored unzoomed. Zoom is a way of looking at the page,
+never part of what is on it.
+
 ### How the ink is captured
 
 Four things separate ink that feels like a pen from a mouse trail:

@@ -56,6 +56,7 @@
       </header>
 
       <div class="viewport" id="viewport">
+        <div class="zoomable" id="zoomable">
 
         <section class="view month" id="viewMonth" data-screen-label="Month view">
           <div class="month-head" id="monthHead"></div>
@@ -89,8 +90,11 @@
             <span class="notes-label" id="notesLabel"></span>
           </div>
         </section>
+        </div>
 
         <canvas id="ink" data-tool="pen"></canvas>
+
+        <button class="zoom-pill" id="zoomPill" hidden>100%</button>
 
         <div class="toolbar" role="toolbar" aria-label="Ink tools">
           <button class="btn btn-icon btn-ghost" data-tool="cursor" aria-label="Select mode">
