@@ -246,11 +246,17 @@ finger. The rules that work:
 - **A pen owns the screen while it is down.** Touches are ignored outright for
   the duration, rather than counted — counting one made a stroke look like the
   start of a pinch and threw it away.
-- **A lone touch within 100ms of a pen sample is probably the hand settling**,
-  so it does not start a stroke. Deliberately short: switching from pen to
-  finger should not feel like waiting. This timer is the lesser guard — a palm
-  landing *during* a stroke is caught by the rule above, which does not consult
-  it. `PALM_MS` in `app.js` is the dial if stray marks show up on pen-lift. Two fingers are exempt — that is
+- **A lone touch within 50ms of the pen leaving the glass** does not start a
+  stroke. This timer is the lesser guard — a palm landing *during* a stroke is
+  caught by the rule above, which does not consult it — so it can stay short
+  enough not to be felt. `PALM_MS` in `app.js` is the dial if stray marks show
+  up on pen-lift.
+- **Only contact counts as the pen being used.** An Apple Pencil reports
+  `pointermove` while merely hovering above the glass, with no buttons and no
+  pressure. Counting that held the palm window open for as long as the Pencil
+  was anywhere near the screen, locking the finger out entirely — a delay no
+  amount of shortening the window could fix, because the window never got a
+  chance to expire. Two fingers are exempt — that is
   unmistakably deliberate — so pinching works the instant a stroke ends.
 - **Panning is exempt too.** A page that jumps is a nuisance you undo by
   dragging back; a stray mark is damage. Only drawing is worth a wait.

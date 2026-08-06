@@ -1681,7 +1681,7 @@ window.INKLING_EVENTS = {
 
   var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
   var BETA = 0.012;       // How quickly the filter opens up with speed.
-  var PALM_MS = 100;      // How long a lone touch is read as the hand, not a stroke.
+  var PALM_MS = 50;       // How long a lone touch is read as the hand, not a stroke.
 
   function LowPass() { this.y = null; }
   LowPass.prototype.filter = function (x, a) {
@@ -1718,6 +1718,16 @@ window.INKLING_EVENTS = {
   var fx = null, fy = null;   // position filters, one stroke's worth
   var activeId = null;        // the single pointer that owns the stroke
   var lastPenAt = -Infinity;
+
+  /* Only contact counts as the pen being used. An Apple Pencil reports
+     pointermove while merely hovering above the glass — no buttons, no
+     pressure — and treating that as "the pen just wrote" holds the palm
+     window open for as long as the Pencil is anywhere near the screen.
+     The finger is then locked out permanently, however short the window is
+     set, which is not a delay you can tune your way out of. */
+  function penInContact(e) {
+    return e.pointerType === 'pen' && (e.buttons !== 0 || e.pressure > 0);
+  }
   var lastPt = null, lastT = 0, lastW = 0;
 
   /* The digitizer samples far faster than the screen refreshes — an Apple
@@ -1897,7 +1907,7 @@ window.INKLING_EVENTS = {
 
   el.ink.addEventListener('pointermove', function (e) {
     if (touches.has(e.pointerId)) touches.set(e.pointerId, toStage(e));
-    if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+    if (penInContact(e)) lastPenAt = e.timeStamp;
 
     if (gesture) { updateGesture(); return; }
 
@@ -1921,7 +1931,11 @@ window.INKLING_EVENTS = {
   });
 
   function releasePointer(e) {
-    if (e) touches.delete(e.pointerId);
+    if (e) {
+      touches.delete(e.pointerId);
+      // Start the window at the lift, not at the last move before it.
+      if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+    }
 
     if (gesture && touches.size < 2) endGesture();
     if (panning && (!e || e.pointerId === panning.id)) panning = null;
