@@ -610,7 +610,7 @@
 
   var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
   var BETA = 0.012;       // How quickly the filter opens up with speed.
-  var PALM_MS = 200;      // How long a lone touch is read as the hand, not a stroke.
+  var PALM_MS = 100;      // How long a lone touch is read as the hand, not a stroke.
 
   function LowPass() { this.y = null; }
   LowPass.prototype.filter = function (x, a) {

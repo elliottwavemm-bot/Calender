@@ -246,10 +246,11 @@ finger. The rules that work:
 - **A pen owns the screen while it is down.** Touches are ignored outright for
   the duration, rather than counted — counting one made a stroke look like the
   start of a pinch and threw it away.
-- **A lone touch within 200ms of a pen sample is probably the hand settling**,
+- **A lone touch within 100ms of a pen sample is probably the hand settling**,
   so it does not start a stroke. Deliberately short: switching from pen to
-  finger should not feel like waiting. A palm that lands later than that will
-  leave a mark — `PALM_MS` in `app.js` is the dial if that happens. Two fingers are exempt — that is
+  finger should not feel like waiting. This timer is the lesser guard — a palm
+  landing *during* a stroke is caught by the rule above, which does not consult
+  it. `PALM_MS` in `app.js` is the dial if stray marks show up on pen-lift. Two fingers are exempt — that is
   unmistakably deliberate — so pinching works the instant a stroke ends.
 - **Panning is exempt too.** A page that jumps is a nuisance you undo by
   dragging back; a stray mark is damage. Only drawing is worth a wait.
