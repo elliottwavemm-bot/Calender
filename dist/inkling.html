@@ -1737,8 +1737,13 @@ window.INKLING_EVENTS = {
     // The nib keeps its size on screen, so zooming in writes finer on the
     // page — which is the point of zooming in to write.
     var base = state.size / zoom;
-    if (e.pointerType === 'pen' && e.pressure > 0) {
-      return base * (0.35 + 1.15 * e.pressure);
+    if (e.pointerType === 'pen') {
+      // First contact very often reports zero pressure. Reading that as "no
+      // pressure available" switches to the speed model for a sample or two
+      // and starts the line as a hairline, which is what a stroke that
+      // "didn't take" usually was. Floor it and stay on one model.
+      var pr = e.pressure > 0 ? e.pressure : 0.4;
+      return base * (0.5 + 0.9 * pr);
     }
     // Nothing to read the pressure from (finger, mouse), so let speed stand
     // in for it: a nib lays down less ink the faster it is dragged.
@@ -1773,23 +1778,27 @@ window.INKLING_EVENTS = {
   }
 
   /* ── Pointers ───────────────────────────────────────────────────────
-     One pointer draws (or pans, with the select tool). Two pointers are a
-     pinch, never a stroke — so a second finger landing cancels whatever the
-     first was drawing rather than leaving a stray mark behind. */
+     Only fingers pinch. A pen never joins a gesture, and while a pen is
+     drawing, touches are ignored outright — a palm resting beside the nib
+     reports as a pointer like any other, and counting it made the stroke
+     look like the start of a pinch and threw it away. That is the "some
+     strokes just don't take" case. */
 
-  var pointers = new Map();   // every pointer currently down, in stage space
+  var touches = new Map();    // finger contacts only, in stage space
   var gesture = null;         // pinch in progress
-  var panning = null;         // one-finger pan with the select tool
+  var panning = null;         // one-pointer pan with the pan tool
+  var drawIsPen = false;      // whether the live stroke belongs to a stylus
 
   function abortStroke() {
     if (!live) return;
     live = null;
     activeId = null;
+    drawIsPen = false;
     redraw();
   }
 
   function beginGesture() {
-    var pts = Array.from(pointers.values());
+    var pts = Array.from(touches.values());
     var a = pts[0], b = pts[1];
     gesture = {
       dist: Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1),
@@ -1803,7 +1812,7 @@ window.INKLING_EVENTS = {
   }
 
   function updateGesture() {
-    var pts = Array.from(pointers.values());
+    var pts = Array.from(touches.values());
     if (pts.length < 2) return;
     var a = pts[0], b = pts[1];
     var dist = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1);
@@ -1833,17 +1842,30 @@ window.INKLING_EVENTS = {
   }
 
   el.ink.addEventListener('pointerdown', function (e) {
-    pointers.set(e.pointerId, toStage(e));
     if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
 
-    if (pointers.size === 2) {
-      abortStroke();
-      panning = null;
-      try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
-      beginGesture();
-      return;
+    if (e.pointerType === 'touch') {
+      // A pen owns the screen while it is down. Whatever else the hand is
+      // resting on the glass is not a gesture and not a stroke.
+      if (drawIsPen && live) return;
+
+      touches.set(e.pointerId, toStage(e));
+      if (touches.size === 2) {
+        abortStroke();
+        panning = null;
+        try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
+        beginGesture();
+        return;
+      }
+      if (touches.size > 2) return;          // extra fingers do nothing
+      // A lone touch so soon after the pen is the hand, not an instruction.
+      // Two fingers are exempt above: that is unmistakably deliberate.
+      if (e.timeStamp - lastPenAt < PALM_MS) return;
+    } else if (gesture) {
+      return;                                // a pen or mouse never pinches
     }
-    if (pointers.size > 2) return;
+
+    if (activeId !== null || panning) return;
 
     e.preventDefault();
     try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
@@ -1852,10 +1874,9 @@ window.INKLING_EVENTS = {
       panning = { id: e.pointerId, x: toStage(e).x - panX, y: toStage(e).y - panY };
       return;
     }
-    if (activeId !== null) return;
-    if (e.pointerType === 'touch' && e.timeStamp - lastPenAt < PALM_MS) return;
 
     activeId = e.pointerId;
+    drawIsPen = e.pointerType === 'pen';
     fx = new OneEuro(MIN_CUTOFF, BETA);
     fy = new OneEuro(MIN_CUTOFF, BETA);
     lastPt = null; lastT = e.timeStamp; lastW = 0;
@@ -1867,7 +1888,7 @@ window.INKLING_EVENTS = {
   });
 
   el.ink.addEventListener('pointermove', function (e) {
-    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, toStage(e));
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, toStage(e));
     if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
 
     if (gesture) { updateGesture(); return; }
@@ -1891,16 +1912,17 @@ window.INKLING_EVENTS = {
     }
   });
 
-  function endStroke(e) {
-    if (e) pointers.delete(e.pointerId);
+  function releasePointer(e) {
+    if (e) touches.delete(e.pointerId);
 
-    if (gesture && pointers.size < 2) endGesture();
+    if (gesture && touches.size < 2) endGesture();
     if (panning && (!e || e.pointerId === panning.id)) panning = null;
 
     if (!live || (e && e.pointerId !== activeId)) return;
     var s = live;
     live = null;
     activeId = null;
+    drawIsPen = false;
 
     // Round on the way out, not on the way in — quantising during capture
     // adds a jitter of its own for the filter to chase.
@@ -1914,9 +1936,13 @@ window.INKLING_EVENTS = {
     redraw();
   }
 
-  el.ink.addEventListener('pointerup', endStroke);
-  el.ink.addEventListener('pointercancel', endStroke);
-  el.ink.addEventListener('lostpointercapture', endStroke);
+  /* On window, not the canvas: a pointer released anywhere — off the edge,
+     over another element, after the browser stole it — still has to clear
+     its state. Left tracked, it makes the next touch look like the second
+     finger of a pinch, and drawing stops working until a reload. */
+  window.addEventListener('pointerup', releasePointer);
+  window.addEventListener('pointercancel', releasePointer);
+  el.ink.addEventListener('lostpointercapture', releasePointer);
 
   /* Trackpad pinch and ctrl+wheel both arrive here. */
   el.ink.addEventListener('wheel', function (e) {

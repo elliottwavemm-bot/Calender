@@ -235,9 +235,25 @@ makes writing grow heavier as a page fills:
 (per frame, measured with a GPU sync point after each; 60fps allows 16.7ms.)
 
 Alongside those: `desynchronized: true` on the canvas context to skip a
-compositing step, one pointer owning a stroke so a second finger cannot
-corrupt it, and touches ignored for 1.5s after a pen sample so a resting palm
-does not draw.
+compositing step, and one pointer owning a stroke so a second contact cannot
+corrupt it.
+
+Palm rejection is the fiddly part. A palm resting beside the nib reports as a
+pointer like any other, so it has to be told apart from a deliberate second
+finger. The rules that work:
+
+- **Only fingers pinch.** A pen never joins a gesture.
+- **A pen owns the screen while it is down.** Touches are ignored outright for
+  the duration, rather than counted — counting one made a stroke look like the
+  start of a pinch and threw it away.
+- **A lone touch within 1.5s of a pen sample is the hand, not an
+  instruction.** Two fingers are exempt: that is unmistakably deliberate, so
+  pinching still works the instant a stroke ends.
+
+Releases are handled on `window`, not the canvas. A pointer let go off the
+edge, or taken by the browser, still has to clear its state; left tracked, it
+makes the next touch look like a second finger and drawing stops working
+until a reload.
 
 ## Configuration
 
