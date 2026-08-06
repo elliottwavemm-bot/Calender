@@ -610,7 +610,7 @@
 
   var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
   var BETA = 0.012;       // How quickly the filter opens up with speed.
-  var PALM_MS = 1500;     // Ignore touches for this long after a pen sample.
+  var PALM_MS = 600;      // How long a lone touch is read as the hand, not a stroke.
 
   function LowPass() { this.y = null; }
   LowPass.prototype.filter = function (x, a) {
@@ -772,6 +772,7 @@
 
   el.ink.addEventListener('pointerdown', function (e) {
     if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
+    var palmWindow = false;
 
     if (e.pointerType === 'touch') {
       // A pen owns the screen while it is down. Whatever else the hand is
@@ -787,14 +788,19 @@
         return;
       }
       if (touches.size > 2) return;          // extra fingers do nothing
-      // A lone touch so soon after the pen is the hand, not an instruction.
+      // A lone touch this soon after the pen is probably the hand settling.
       // Two fingers are exempt above: that is unmistakably deliberate.
-      if (e.timeStamp - lastPenAt < PALM_MS) return;
+      palmWindow = e.timeStamp - lastPenAt < PALM_MS;
     } else if (gesture) {
       return;                                // a pen or mouse never pinches
     }
 
     if (activeId !== null || panning) return;
+
+    // Panning is exempt from the palm window. A page that jumps is a
+    // nuisance you undo by dragging back; a stray mark is damage. Only
+    // drawing is worth making you wait for.
+    if (state.tool !== 'cursor' && palmWindow) return;
 
     e.preventDefault();
     try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }

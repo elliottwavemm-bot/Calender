@@ -246,9 +246,11 @@ finger. The rules that work:
 - **A pen owns the screen while it is down.** Touches are ignored outright for
   the duration, rather than counted — counting one made a stroke look like the
   start of a pinch and threw it away.
-- **A lone touch within 1.5s of a pen sample is the hand, not an
-  instruction.** Two fingers are exempt: that is unmistakably deliberate, so
-  pinching still works the instant a stroke ends.
+- **A lone touch within 600ms of a pen sample is probably the hand settling**,
+  so it does not start a stroke. Two fingers are exempt — that is
+  unmistakably deliberate — so pinching works the instant a stroke ends.
+- **Panning is exempt too.** A page that jumps is a nuisance you undo by
+  dragging back; a stray mark is damage. Only drawing is worth a wait.
 
 Releases are handled on `window`, not the canvas. A pointer let go off the
 edge, or taken by the browser, still has to clear its state; left tracked, it
