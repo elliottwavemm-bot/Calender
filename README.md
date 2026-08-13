@@ -221,6 +221,25 @@ between neighbours. The highlighter keeps a constant width and stays a single
 stroked path, because overlapping translucent fills would stack alpha and
 blotch wherever a stroke doubles back.
 
+**Nothing expensive between one stroke and the next.** Two things were, and
+both were felt as strokes failing to register rather than as slowness:
+
+- `getBoundingClientRect()` was read to map each sample into page space. That
+  forces a synchronous layout, and it ran *per sample* — with coalesced events,
+  hundreds of forced layouts per stroke. The viewport's box only moves when the
+  window does, so it is cached and refreshed on resize and at the start of each
+  interaction.
+- Saving serialises every stroke on every page and blocks until the bytes are
+  down. Done inline on pen-up, the whole cost lands in the gap before the next
+  stroke, and grows with everything written so far. It is now coalesced onto an
+  idle callback, never runs mid-stroke, and is flushed on `pagehide` and on
+  the page being hidden — a home-screen app is closed by being backgrounded.
+
+Strokes are also simplified (Ramer–Douglas–Peucker, tolerance scaled by zoom)
+before being stored: capture keeps every sample the digitizer produced, which
+is far more than the curve needs — around a third survive, with nothing visible
+lost.
+
 **A frame that costs the same at stroke 300 as at stroke 1.** Finished
 strokes are folded into an offscreen canvas; a frame blits that and draws only
 the stroke still in progress. Repainting every stroke every frame is what

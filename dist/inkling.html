@@ -1456,6 +1456,7 @@ window.INKLING_EVENTS = {
     else renderNotes();
 
     renderToolbar();
+    refreshStageRect();
     redraw();
   }
 
@@ -1471,9 +1472,54 @@ window.INKLING_EVENTS = {
 
   function strokes() { return state.ink[pageKey()] || []; }
 
+  /* Saving is synchronous: it serialises every stroke on every page and
+     blocks the main thread until the bytes are down. Doing that the instant
+     the pen lifts drops the whole cost into the gap between one stroke and
+     the next — which is felt as the next stroke failing to register, and
+     gets worse the more you have written. So: never on the critical path,
+     never mid-stroke, and coalesced. */
+  var saveTimer = 0, saveIsIdle = false, savePending = false;
+
   function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.ink)); } catch (e) { /* private mode */ }
+    savePending = true;
+    if (saveTimer) return;
+    if (window.requestIdleCallback) {
+      saveIsIdle = true;
+      saveTimer = requestIdleCallback(function () { saveTimer = 0; flushSave(); }, { timeout: 2000 });
+    } else {
+      saveIsIdle = false;
+      saveTimer = setTimeout(function () { saveTimer = 0; flushSave(); }, 1200);
+    }
   }
+
+  function flushSave() {
+    if (!savePending) return;
+    if (live) { save(); return; }        // never in the middle of a stroke
+    savePending = false;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.ink));
+    } catch (e) {
+      // Out of quota, or private browsing. Keep it in memory and try again
+      // rather than dropping the ink on the floor silently.
+      savePending = true;
+      if (window.console) console.warn('Inkling: ink not saved —', e && e.name);
+    }
+  }
+
+  /* The debounce means there is always work outstanding when the app goes
+     away, and a home-screen app is closed by being backgrounded. */
+  function saveNow() {
+    if (saveTimer) {
+      if (saveIsIdle && window.cancelIdleCallback) cancelIdleCallback(saveTimer);
+      else if (!saveIsIdle) clearTimeout(saveTimer);
+      saveTimer = 0;
+    }
+    flushSave();
+  }
+  window.addEventListener('pagehide', saveNow);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') saveNow();
+  });
 
   function load() {
     try {
@@ -1502,11 +1548,29 @@ window.INKLING_EVENTS = {
   var zoom = 1, panX = 0, panY = 0;
 
   /* Stage space: CSS pixels of the viewport, after undoing the device
-     frame's own scaling. Page space: stage space with zoom and pan undone. */
-  function toStage(e) {
+     frame's own scaling. Page space: stage space with zoom and pan undone.
+
+     The viewport's box is cached. Reading it costs a synchronous layout,
+     and this runs once per input sample — with coalesced events that is
+     hundreds of forced layouts per stroke, which is felt as the pen not
+     keeping up. The box only moves when the window does, so it is
+     refreshed on resize and at the start of each interaction. */
+  var stageRect = { left: 0, top: 0, scale: 1 };
+
+  function refreshStageRect() {
     var r = el.viewport.getBoundingClientRect();
-    var sc = shellScale() || 1;
-    return { x: (e.clientX - r.left) / sc, y: (e.clientY - r.top) / sc };
+    var w = el.viewport.offsetWidth;
+    stageRect.left = r.left;
+    stageRect.top = r.top;
+    stageRect.scale = w ? r.width / w : 1;
+  }
+
+  function toStage(e) {
+    var sc = stageRect.scale || 1;
+    return {
+      x: (e.clientX - stageRect.left) / sc,
+      y: (e.clientY - stageRect.top) / sc
+    };
   }
   function toPage(st) {
     return { x: (st.x - panX) / zoom, y: (st.y - panY) / zoom };
@@ -1860,6 +1924,7 @@ window.INKLING_EVENTS = {
   }
 
   el.ink.addEventListener('pointerdown', function (e) {
+    refreshStageRect();     // once per interaction, not once per sample
     if (e.pointerType === 'pen') lastPenAt = e.timeStamp;
     var palmWindow = false;
 
@@ -1949,6 +2014,43 @@ window.INKLING_EVENTS = {
     }
   });
 
+  /* Ramer-Douglas-Peucker. Capture keeps every sample the digitizer
+     produced — at 240Hz that is far more than the curve needs. Dropping the
+     samples that already sit on the line between their neighbours makes the
+     stored stroke a fraction of the size, and every later redraw cheaper,
+     with nothing visible lost. */
+  function simplify(pts, eps) {
+    if (pts.length < 3) return pts;
+    var keep = new Array(pts.length);
+    keep[0] = keep[pts.length - 1] = true;
+    var stack = [[0, pts.length - 1]];
+
+    while (stack.length) {
+      var seg = stack.pop(), i0 = seg[0], i1 = seg[1];
+      var ax = pts[i0][0], ay = pts[i0][1];
+      var dx = pts[i1][0] - ax, dy = pts[i1][1] - ay;
+      var len2 = dx * dx + dy * dy;
+      var far = -1, farthest = eps;
+
+      for (var i = i0 + 1; i < i1; i++) {
+        var px = pts[i][0] - ax, py = pts[i][1] - ay, d;
+        if (len2 === 0) {
+          d = Math.sqrt(px * px + py * py);
+        } else {
+          var t = Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+          var ex = px - t * dx, ey = py - t * dy;
+          d = Math.sqrt(ex * ex + ey * ey);
+        }
+        if (d > farthest) { farthest = d; far = i; }
+      }
+      if (far >= 0) { keep[far] = true; stack.push([i0, far], [far, i1]); }
+    }
+
+    var out = [];
+    for (var j = 0; j < pts.length; j++) if (keep[j]) out.push(pts[j]);
+    return out;
+  }
+
   function releasePointer(e) {
     if (e) {
       touches.delete(e.pointerId);
@@ -1966,8 +2068,9 @@ window.INKLING_EVENTS = {
     drawIsPen = false;
 
     // Round on the way out, not on the way in — quantising during capture
-    // adds a jitter of its own for the filter to chase.
-    s.p = s.p.map(function (q) {
+    // adds a jitter of its own for the filter to chase. The tolerance is
+    // divided by the zoom so a stroke drawn magnified is not coarsened.
+    s.p = simplify(s.p, 0.4 / zoom).map(function (q) {
       return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, Math.round(q[2] * 100) / 100];
     });
 
@@ -2072,7 +2175,8 @@ window.INKLING_EVENTS = {
      time grids are built from — so re-render, not just repaint. */
   var resizeTimer = 0;
   window.addEventListener('resize', function () {
-    fit();
+    fit();                  // changes --app-scale, so measure after it
+    refreshStageRect();
     redraw();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(render, 120);
