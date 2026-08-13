@@ -251,6 +251,15 @@ finger. The rules that work:
   caught by the rule above, which does not consult it — so it can stay short
   enough not to be felt. `PALM_MS` in `app.js` is the dial if stray marks show
   up on pen-lift.
+- **A pen coming down outranks anything a touch was doing**, and clears it.
+  The hand rests on the glass for as long as you are writing. Once the palm
+  window lapses, that resting contact starts a stroke of its own and owns the
+  canvas — and every real stroke after it is refused, which reads as the app
+  having stopped writing. Shortening the window makes this *more* likely, not
+  less, which is why it is a rule and not a timer.
+- **A broad contact is the hand, whenever it lands.** Where the platform
+  reports contact geometry, anything wider than 40px is refused outright.
+  Browsers that do not measure report 1, and the rule above carries it alone.
 - **Only contact counts as the pen being used.** An Apple Pencil reports
   `pointermove` while merely hovering above the glass, with no buttons and no
   pressure. Counting that held the palm window open for as long as the Pencil

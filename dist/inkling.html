@@ -1682,6 +1682,7 @@ window.INKLING_EVENTS = {
   var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
   var BETA = 0.012;       // How quickly the filter opens up with speed.
   var PALM_MS = 50;       // How long a lone touch is read as the hand, not a stroke.
+  var BROAD_CONTACT = 40; // px of contact width above which a touch is a palm.
 
   function LowPass() { this.y = null; }
   LowPass.prototype.filter = function (x, a) {
@@ -1727,6 +1728,13 @@ window.INKLING_EVENTS = {
      set, which is not a delay you can tune your way out of. */
   function penInContact(e) {
     return e.pointerType === 'pen' && (e.buttons !== 0 || e.pressure > 0);
+  }
+
+  /* Contact geometry, where the platform reports it: a fingertip is small,
+     the side of a hand is not. Browsers that do not measure report 1, which
+     reads as a fingertip and leaves the other rules to do the work. */
+  function isBroadContact(e) {
+    return e.width > BROAD_CONTACT || e.height > BROAD_CONTACT;
   }
   var lastPt = null, lastT = 0, lastW = 0;
 
@@ -1859,6 +1867,7 @@ window.INKLING_EVENTS = {
       // A pen owns the screen while it is down. Whatever else the hand is
       // resting on the glass is not a gesture and not a stroke.
       if (drawIsPen && live) return;
+      if (isBroadContact(e)) return;         // the hand, whenever it lands
 
       touches.set(e.pointerId, toStage(e));
       if (touches.size === 2) {
@@ -1874,8 +1883,18 @@ window.INKLING_EVENTS = {
       // Tuned short on purpose — switching pen to finger should not feel
       // like waiting. A palm that lands later than this draws a mark.
       palmWindow = e.timeStamp - lastPenAt < PALM_MS;
-    } else if (gesture) {
-      return;                                // a pen or mouse never pinches
+    } else {
+      if (gesture) return;                   // a pen or mouse never pinches
+
+      /* A pen coming down outranks anything a touch was doing. The hand
+         rests on the glass for the whole time you are writing; once the
+         palm window lapses, that resting contact starts a stroke of its
+         own and owns the canvas — and then every real stroke after it is
+         refused, which reads as "it stopped writing". Take the canvas
+         back, and drop whatever the hand was drawing. */
+      if (activeId !== null && !drawIsPen) abortStroke();
+      panning = null;
+      touches.clear();
     }
 
     if (activeId !== null || panning) return;
