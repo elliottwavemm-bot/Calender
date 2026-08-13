@@ -62,6 +62,13 @@ iOS copies the touch icon at the moment you add the app and never fetches it
 again, so changing the icon means removing and re-adding. Changing the *app*
 does not — see below.
 
+## Diagnostics
+
+Add `#debug` to the URL and the app prints what it makes of every contact —
+which pointer started a stroke, which was dropped and why, how many samples
+survived. Working out why a stroke did not register is much shorter when the
+device says so itself rather than being guessed at from a simulation.
+
 ## Offline, and updates in place
 
 `sw.js` is a service worker that precaches the whole app, so it opens with no
@@ -276,9 +283,6 @@ finger. The rules that work:
   canvas — and every real stroke after it is refused, which reads as the app
   having stopped writing. Shortening the window makes this *more* likely, not
   less, which is why it is a rule and not a timer.
-- **A broad contact is the hand, whenever it lands.** Where the platform
-  reports contact geometry, anything wider than 40px is refused outright.
-  Browsers that do not measure report 1, and the rule above carries it alone.
 - **Only contact counts as the pen being used.** An Apple Pencil reports
   `pointermove` while merely hovering above the glass, with no buttons and no
   pressure. Counting that held the palm window open for as long as the Pencil

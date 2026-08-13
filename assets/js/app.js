@@ -675,7 +675,6 @@
   var MIN_CUTOFF = 1.4;   // Hz. Lower = steadier when the pen moves slowly.
   var BETA = 0.012;       // How quickly the filter opens up with speed.
   var PALM_MS = 50;       // How long a lone touch is read as the hand, not a stroke.
-  var BROAD_CONTACT = 40; // px of contact width above which a touch is a palm.
 
   function LowPass() { this.y = null; }
   LowPass.prototype.filter = function (x, a) {
@@ -721,13 +720,6 @@
      set, which is not a delay you can tune your way out of. */
   function penInContact(e) {
     return e.pointerType === 'pen' && (e.buttons !== 0 || e.pressure > 0);
-  }
-
-  /* Contact geometry, where the platform reports it: a fingertip is small,
-     the side of a hand is not. Browsers that do not measure report 1, which
-     reads as a fingertip and leaves the other rules to do the work. */
-  function isBroadContact(e) {
-    return e.width > BROAD_CONTACT || e.height > BROAD_CONTACT;
   }
   var lastPt = null, lastT = 0, lastW = 0;
 
@@ -786,6 +778,24 @@
       var pg = toPage({ x: x, y: y });
       live.p.push([pg.x, pg.y, lastW]);
     }
+  }
+
+  /* ── Diagnostics ────────────────────────────────────────────────────
+     Add #debug to the URL to watch what the app makes of each contact.
+     Guessing at why a stroke did not start is a poor substitute for the
+     device saying so itself. */
+  var DEBUG = /(^|[#&])debug\b/.test(location.hash);
+  var debugBox = null, debugLines = [];
+
+  function log(msg) {
+    if (!DEBUG) return;
+    if (!debugBox) {
+      debugBox = node('div', 'debug-box');
+      el.viewport.appendChild(debugBox);
+    }
+    debugLines.push((Math.round(performance.now()) % 100000) + '  ' + msg);
+    if (debugLines.length > 15) debugLines.shift();
+    debugBox.textContent = 'PALM_MS ' + PALM_MS + '\n' + debugLines.join('\n');
   }
 
   /* ── Pointers ───────────────────────────────────────────────────────
@@ -860,8 +870,7 @@
     if (e.pointerType === 'touch') {
       // A pen owns the screen while it is down. Whatever else the hand is
       // resting on the glass is not a gesture and not a stroke.
-      if (drawIsPen && live) return;
-      if (isBroadContact(e)) return;         // the hand, whenever it lands
+      if (drawIsPen && live) { log('touch#' + e.pointerId + ' dropped: pen is down'); return; }
 
       touches.set(e.pointerId, toStage(e));
       if (touches.size === 2) {
@@ -869,16 +878,17 @@
         panning = null;
         try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
         beginGesture();
+        log('pinch starts (2 fingers)');
         return;
       }
-      if (touches.size > 2) return;          // extra fingers do nothing
+      if (touches.size > 2) { log('touch#' + e.pointerId + ' dropped: 3rd finger'); return; }
       // A lone touch this soon after the pen is probably the hand settling.
       // Two fingers are exempt above: that is unmistakably deliberate.
       // Tuned short on purpose — switching pen to finger should not feel
       // like waiting. A palm that lands later than this draws a mark.
       palmWindow = e.timeStamp - lastPenAt < PALM_MS;
     } else {
-      if (gesture) return;                   // a pen or mouse never pinches
+      if (gesture) { log(e.pointerType + ' dropped: pinch in progress'); return; }
 
       /* A pen coming down outranks anything a touch was doing. The hand
          rests on the glass for the whole time you are writing; once the
@@ -886,17 +896,23 @@
          own and owns the canvas — and then every real stroke after it is
          refused, which reads as "it stopped writing". Take the canvas
          back, and drop whatever the hand was drawing. */
-      if (activeId !== null && !drawIsPen) abortStroke();
+      if (activeId !== null && !drawIsPen) { log('pen takes over from touch#' + activeId); abortStroke(); }
       panning = null;
       touches.clear();
     }
 
-    if (activeId !== null || panning) return;
+    if (activeId !== null || panning) {
+      log(e.pointerType + '#' + e.pointerId + ' dropped: busy (owner=' + activeId + (panning ? ', panning' : '') + ')');
+      return;
+    }
 
     // Panning is exempt from the palm window. A page that jumps is a
     // nuisance you undo by dragging back; a stray mark is damage. Only
     // drawing is worth making you wait for.
-    if (state.tool !== 'cursor' && palmWindow) return;
+    if (state.tool !== 'cursor' && palmWindow) {
+      log('touch#' + e.pointerId + ' dropped: palm window (' + Math.round(e.timeStamp - lastPenAt) + 'ms since pen)');
+      return;
+    }
 
     e.preventDefault();
     try { el.ink.setPointerCapture(e.pointerId); } catch (x) { /* older engines */ }
@@ -915,6 +931,7 @@
     var tool = state.tool === 'pen' ? 'p' : state.tool === 'hl' ? 'hl' : 'er';
     live = { t: tool, c: state.color, w: state.size / zoom, p: [] };
     addSamples(e);
+    log(e.pointerType + '#' + e.pointerId + ' START  pressure ' + (e.pressure || 0).toFixed(2));
     redraw();
   });
 
@@ -1003,6 +1020,7 @@
       return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, Math.round(q[2] * 100) / 100];
     });
 
+    log(e ? (e.pointerType + '#' + e.pointerId + ' end  ' + s.p.length + ' pts kept') : 'stroke end');
     paintStroke(cctx, s);                        // fold into the committed layer
     state.ink[pageKey()] = strokes().concat([s]);
     save();
